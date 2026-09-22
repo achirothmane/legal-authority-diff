@@ -2,8 +2,6 @@ name: structured-relation-heldout-v0.10
 
 on:
   workflow_dispatch:
-  push:
-    branches: ["v0.10-structured-relation-extraction"]
 
 concurrency:
   group: structured-relation-heldout-v0.10
