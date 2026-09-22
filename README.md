@@ -139,3 +139,44 @@ The repository includes a manual GitHub Actions workflow named `live-courtlisten
 Add a repository Actions secret named `COURTLISTENER_TOKEN`, then run **Actions → live-courtlistener-smoke → Run workflow**.
 
 The live check is kept separate from ordinary CI because external API availability and credentials should not make deterministic unit tests flaky.
+
+
+## Real authority regression (V0.3)
+
+V0.3 moves beyond citation existence and resolves an unambiguous CourtListener case result through its linked docket to obtain the source court.
+
+When a record supplies a narrow federal appellate target context:
+
+```json
+{
+  "context": {
+    "target_court_id": "ca2"
+  }
+}
+```
+
+the adapter can derive a conservative authority class using the `us-federal-appellate-v0.3` rule:
+
+- SCOTUS → `controlling` for a federal circuit target;
+- a published decision from the target circuit → `controlling`;
+- a published decision from a different federal circuit → `persuasive`;
+- anything outside that narrow scope → unresolved rather than guessed.
+
+The live regression fixture uses two citations that CourtListener resolves successfully:
+
+- baseline: `576 U.S. 644` → source court `scotus`;
+- candidate: `771 F.3d 456` → source court `ca9`;
+- target context: `ca2`.
+
+The resulting differential is:
+
+```text
+controlling -> persuasive
+RESULT: BLOCK
+```
+
+Both citations are real and found. The block is therefore caused by an authority-strength downgrade, not by a missing-citation check.
+
+This V0.3 test still does **not** independently verify proposition support, treatment/current validity, or every U.S. hierarchy rule. Those remain separate evidence layers.
+
+The authenticated end-to-end check is available as the manual GitHub Actions workflow `live-authority-regression`.

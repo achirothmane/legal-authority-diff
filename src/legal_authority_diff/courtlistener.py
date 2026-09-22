@@ -1,10 +1,12 @@
-"""CourtListener citation-existence adapter.
+"""CourtListener adapter for citation existence and narrow court-authority metadata.
 
-This module intentionally verifies only what CourtListener's citation-lookup
-endpoint can establish deterministically: whether a U.S. case-law citation
-can be resolved in CourtListener, plus normalization/ambiguity metadata.
+The adapter verifies U.S. case-law citations against CourtListener, can resolve
+an unambiguous result to its source court through the linked docket, and can
+derive a deliberately narrow federal authority class for a supplied target
+federal appellate court.
 
-It does not infer proposition support, treatment, binding force, or legal advice.
+It does not verify proposition support, treatment, current validity, or provide
+legal advice.
 """
 
 from __future__ import annotations
@@ -25,9 +27,48 @@ from urllib.request import Request, urlopen
 ENDPOINT = "https://www.courtlistener.com/api/rest/v4/citation-lookup/"
 DEFAULT_TOKEN_ENV = "COURTLISTENER_TOKEN"
 
+FEDERAL_CIRCUIT_COURTS = {
+    "ca1",
+    "ca2",
+    "ca3",
+    "ca4",
+    "ca5",
+    "ca6",
+    "ca7",
+    "ca8",
+    "ca9",
+    "ca10",
+    "ca11",
+    "cadc",
+    "cafc",
+}
+
 
 class CourtListenerError(RuntimeError):
     """Raised when the CourtListener adapter cannot complete a lookup."""
+
+
+def _request_json(
+    request: Request,
+    *,
+    opener: Callable[..., Any] = urlopen,
+    timeout: float = 20.0,
+) -> Any:
+    try:
+        with opener(request, timeout=timeout) as response:
+            payload = response.read().decode("utf-8")
+    except HTTPError as exc:
+        detail = exc.read().decode("utf-8", errors="replace")
+        raise CourtListenerError(
+            f"CourtListener HTTP {exc.code}: {detail[:500]}"
+        ) from exc
+    except URLError as exc:
+        raise CourtListenerError(f"CourtListener request failed: {exc.reason}") from exc
+
+    try:
+        return json.loads(payload)
+    except json.JSONDecodeError as exc:
+        raise CourtListenerError("CourtListener returned invalid JSON") from exc
 
 
 def lookup_citation(
@@ -45,28 +86,13 @@ def lookup_citation(
     headers = {
         "Accept": "application/json",
         "Content-Type": "application/x-www-form-urlencoded",
-        "User-Agent": "legal-authority-diff/0.2",
+        "User-Agent": "legal-authority-diff/0.3",
     }
     if token:
         headers["Authorization"] = f"Token {token}"
 
     request = Request(ENDPOINT, data=body, headers=headers, method="POST")
-
-    try:
-        with opener(request, timeout=timeout) as response:
-            payload = response.read().decode("utf-8")
-    except HTTPError as exc:
-        detail = exc.read().decode("utf-8", errors="replace")
-        raise CourtListenerError(
-            f"CourtListener HTTP {exc.code}: {detail[:500]}"
-        ) from exc
-    except URLError as exc:
-        raise CourtListenerError(f"CourtListener request failed: {exc.reason}") from exc
-
-    try:
-        data = json.loads(payload)
-    except json.JSONDecodeError as exc:
-        raise CourtListenerError("CourtListener returned invalid JSON") from exc
+    data = _request_json(request, opener=opener, timeout=timeout)
 
     if not isinstance(data, list):
         raise CourtListenerError("CourtListener returned an unexpected response shape")
@@ -104,6 +130,110 @@ def lookup_citation(
     }
 
 
+def fetch_docket_metadata(
+    docket_url: str,
+    *,
+    token: str,
+    opener: Callable[..., Any] = urlopen,
+    timeout: float = 20.0,
+) -> dict[str, Any]:
+    """Fetch the minimal docket metadata needed to identify the source court."""
+    request = Request(
+        docket_url,
+        headers={
+            "Authorization": f"Token {token}",
+            "Accept": "application/json",
+            "User-Agent": "legal-authority-diff/0.3",
+        },
+        method="GET",
+    )
+    data = _request_json(request, opener=opener, timeout=timeout)
+    if not isinstance(data, dict):
+        raise CourtListenerError("CourtListener docket response was not an object")
+    return {
+        "docket_id": data.get("id"),
+        "docket_number": data.get("docket_number"),
+        "court": data.get("court"),
+        "court_id": data.get("court_id"),
+    }
+
+
+def resolve_authority_metadata(
+    lookup: dict[str, Any],
+    *,
+    token: str | None,
+    opener: Callable[..., Any] = urlopen,
+    timeout: float = 20.0,
+) -> dict[str, Any]:
+    """Resolve an unambiguous found citation to a source court."""
+    enriched = copy.deepcopy(lookup)
+    clusters = enriched.get("clusters") or []
+
+    if enriched.get("status") != 200 or len(clusters) != 1:
+        enriched["authority_metadata_state"] = "UNRESOLVED"
+        return enriched
+
+    cluster = clusters[0]
+    if not isinstance(cluster, dict):
+        enriched["authority_metadata_state"] = "UNRESOLVED"
+        return enriched
+
+    docket_url = cluster.get("docket")
+    if not token or not isinstance(docket_url, str) or not docket_url.startswith("http"):
+        enriched["authority_metadata_state"] = "UNRESOLVED"
+        return enriched
+
+    docket = fetch_docket_metadata(
+        docket_url,
+        token=token,
+        opener=opener,
+        timeout=timeout,
+    )
+
+    enriched["authority_metadata_state"] = "RESOLVED"
+    enriched["source_court_id"] = docket.get("court_id")
+    enriched["source_court_url"] = docket.get("court")
+    enriched["docket_id"] = docket.get("docket_id")
+    enriched["docket_number"] = docket.get("docket_number")
+    enriched["precedential_status"] = cluster.get("precedential_status")
+    return enriched
+
+
+def infer_federal_authority_status(
+    source_court_id: str | None,
+    target_court_id: str | None,
+    precedential_status: str | None,
+) -> str | None:
+    """Infer a narrow federal appellate authority class.
+
+    Scope:
+    - SCOTUS is controlling for federal circuit targets.
+    - A published decision from the target circuit is controlling there.
+    - A published decision from a different federal circuit is persuasive.
+    - Everything else is unresolved rather than guessed.
+    """
+    source = (source_court_id or "").strip().lower()
+    target = (target_court_id or "").strip().lower()
+    precedent = (precedential_status or "").strip().lower()
+
+    if target not in FEDERAL_CIRCUIT_COURTS:
+        return None
+
+    if source == "scotus":
+        return "controlling"
+
+    if source not in FEDERAL_CIRCUIT_COURTS:
+        return None
+
+    if precedent != "published":
+        return None
+
+    if source == target:
+        return "controlling"
+
+    return "persuasive"
+
+
 def apply_lookup(
     record: dict[str, Any],
     lookup: dict[str, Any],
@@ -134,8 +264,19 @@ def apply_lookup(
                 "date_filed": cluster.get("date_filed"),
                 "precedential_status": cluster.get("precedential_status"),
                 "absolute_url": cluster.get("absolute_url"),
+                "docket_id": cluster.get("docket_id"),
             }
         )
+
+    context = enriched.get("context")
+    target_court_id = context.get("target_court_id") if isinstance(context, dict) else None
+    derived_status = infer_federal_authority_status(
+        lookup.get("source_court_id"),
+        target_court_id,
+        lookup.get("precedential_status"),
+    )
+    if derived_status is not None:
+        authority["status"] = derived_status
 
     authority["verification"] = {
         "provider": "courtlistener",
@@ -145,6 +286,17 @@ def apply_lookup(
         "normalized_citations": lookup.get("normalized_citations") or [],
         "matches": cluster_summaries,
         "error_message": lookup.get("error_message") or "",
+        "authority_metadata_state": lookup.get("authority_metadata_state", "UNRESOLVED"),
+        "source_court_id": lookup.get("source_court_id"),
+        "source_court_url": lookup.get("source_court_url"),
+        "docket_id": lookup.get("docket_id"),
+        "docket_number": lookup.get("docket_number"),
+        "precedential_status": lookup.get("precedential_status"),
+        "target_court_id": target_court_id,
+        "derived_authority_status": derived_status,
+        "authority_rule": (
+            "us-federal-appellate-v0.3" if derived_status is not None else None
+        ),
     }
 
     return enriched
@@ -174,11 +326,17 @@ def enrich_records(
                 "normalized_citations": [],
                 "matches": [],
                 "error_message": "Record has no authority.citation value.",
+                "authority_metadata_state": "UNRESOLVED",
             }
             enriched.append(copy_record)
             continue
 
         lookup = lookup_citation(str(citation), token=token, opener=opener)
+        lookup = resolve_authority_metadata(
+            lookup,
+            token=token,
+            opener=opener,
+        )
         enriched.append(apply_lookup(record, lookup))
 
         if delay_seconds > 0 and index < len(records) - 1:
@@ -215,7 +373,7 @@ def _write_jsonl(path: str, records: list[dict[str, Any]]) -> None:
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="legal-enrich-citations",
-        description="Enrich Legal Authority Diff JSONL with CourtListener citation lookup evidence.",
+        description="Enrich Legal Authority Diff JSONL with CourtListener evidence.",
     )
     parser.add_argument("input", help="Input JSONL path")
     parser.add_argument("output", help="Output JSONL path")
