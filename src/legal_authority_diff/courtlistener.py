@@ -88,7 +88,7 @@ def lookup_citation(
     headers = {
         "Accept": "application/json",
         "Content-Type": "application/x-www-form-urlencoded",
-        "User-Agent": "legal-authority-diff/0.4",
+        "User-Agent": "legal-authority-diff/0.5",
     }
     if token:
         headers["Authorization"] = f"Token {token}"
@@ -145,7 +145,7 @@ def fetch_docket_metadata(
         headers={
             "Authorization": f"Token {token}",
             "Accept": "application/json",
-            "User-Agent": "legal-authority-diff/0.4",
+            "User-Agent": "legal-authority-diff/0.5",
         },
         method="GET",
     )
@@ -202,6 +202,55 @@ def resolve_authority_metadata(
     return enriched
 
 
+def fetch_opinion_document(
+    opinion_url: str,
+    *,
+    token: str,
+    opener: Callable[..., Any] = urlopen,
+    timeout: float = 20.0,
+) -> dict[str, Any]:
+    """Fetch CourtListener opinion metadata plus its best available text."""
+    request = Request(
+        opinion_url,
+        headers={
+            "Authorization": f"Token {token}",
+            "Accept": "application/json",
+            "User-Agent": "legal-authority-diff/0.5",
+        },
+        method="GET",
+    )
+    data = _request_json(request, opener=opener, timeout=timeout)
+    if not isinstance(data, dict):
+        raise CourtListenerError("CourtListener opinion response was not an object")
+
+    text: str | None = None
+    html_value = data.get("html_with_citations")
+    if isinstance(html_value, str) and html_value.strip():
+        text = html_to_text(html_value)
+
+    if text is None:
+        for field in ("html", "html_lawbox", "html_columbia", "html_anon_2020"):
+            value = data.get(field)
+            if isinstance(value, str) and value.strip():
+                text = html_to_text(value)
+                break
+
+    if text is None:
+        plain = data.get("plain_text")
+        if isinstance(plain, str) and plain.strip():
+            text = plain
+
+    if text is None:
+        raise CourtListenerError("CourtListener opinion has no usable text field")
+
+    return {
+        "text": text,
+        "type": data.get("type"),
+        "id": data.get("id"),
+        "resource_uri": data.get("resource_uri") or opinion_url,
+    }
+
+
 def fetch_opinion_text(
     opinion_url: str,
     *,
@@ -210,33 +259,12 @@ def fetch_opinion_text(
     timeout: float = 20.0,
 ) -> str:
     """Fetch CourtListener opinion text, preferring html_with_citations."""
-    request = Request(
+    return fetch_opinion_document(
         opinion_url,
-        headers={
-            "Authorization": f"Token {token}",
-            "Accept": "application/json",
-            "User-Agent": "legal-authority-diff/0.4",
-        },
-        method="GET",
-    )
-    data = _request_json(request, opener=opener, timeout=timeout)
-    if not isinstance(data, dict):
-        raise CourtListenerError("CourtListener opinion response was not an object")
-
-    html_value = data.get("html_with_citations")
-    if isinstance(html_value, str) and html_value.strip():
-        return html_to_text(html_value)
-
-    for field in ("html", "html_lawbox", "html_columbia", "html_anon_2020"):
-        value = data.get(field)
-        if isinstance(value, str) and value.strip():
-            return html_to_text(value)
-
-    plain = data.get("plain_text")
-    if isinstance(plain, str) and plain.strip():
-        return plain
-
-    raise CourtListenerError("CourtListener opinion has no usable text field")
+        token=token,
+        opener=opener,
+        timeout=timeout,
+    )["text"]
 
 
 def resolve_support_evidence(

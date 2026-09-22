@@ -1,0 +1,32 @@
+name: live-support-benchmark-v0.5
+
+on:
+  workflow_dispatch:
+
+concurrency:
+  group: live-support-benchmark-v0.5
+  cancel-in-progress: true
+
+jobs:
+  live-support-benchmark:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - run: python -m pip install -e ".[benchmark]"
+      - name: Run 20-pair benchmark against official GovInfo U.S. Reports PDFs
+        run: |
+          legal-benchmark-support \
+            benchmarks/real-claim-citation-v0.5/pairs.jsonl \
+            --source govinfo \
+            --threshold 0.34 \
+            --output /tmp/v0.5-report.json
+      - name: Report confusion matrix and mistakes
+        run: python scripts/report_v05_benchmark.py /tmp/v0.5-report.json
+      - uses: actions/upload-artifact@v4
+        with:
+          name: v0.5-govinfo-lexical-report
+          path: /tmp/v0.5-report.json
