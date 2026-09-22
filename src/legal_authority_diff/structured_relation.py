@@ -263,7 +263,8 @@ def _action_patterns(
         (
             "OVERRULE",
             re.compile(
-                rf"{target}.{{0,180}}\bshould\s+be\s+and\s+now\s+is\s+overruled\b",
+                rf"{target}(?:\s|,|\([^)]*\)){{0,12}}"
+                rf"should\s+be\s+and\s+now\s+is\s+overruled\b",
                 flags,
             ),
         ),
@@ -277,7 +278,8 @@ def _action_patterns(
         (
             "OVERRULE",
             re.compile(
-                rf"{target}.{{0,180}}\b(?:is|are|was|were|has\s+been)\s+"
+                rf"{target}(?:\s|,|\([^)]*\)){{0,18}}"
+                rf"(?:is|are|was|were|has\s+been)\s+"
                 rf"(?:expressly\s+)?overruled\b",
                 flags,
             ),
@@ -285,7 +287,7 @@ def _action_patterns(
         (
             "WEAKEN",
             re.compile(
-                rf"{target}.{{0,260}}\b(?:is|are|was|were)\s+no\s+longer\s+"
+                rf"{target}.{{0,220}}\b(?:is|are|was|were)\s+no\s+longer\s+"
                 rf"(?:controlling|binding|good\s+law)\b",
                 flags,
             ),
@@ -293,7 +295,7 @@ def _action_patterns(
         (
             "WEAKEN",
             re.compile(
-                rf"{target}.{{0,320}}\bshould\s+no\s+longer\s+be\s+regarded\s+"
+                rf"{target}.{{0,260}}\bshould\s+no\s+longer\s+be\s+regarded\s+"
                 rf"as\s+mandatory\b",
                 flags,
             ),
@@ -301,7 +303,7 @@ def _action_patterns(
         (
             "WEAKEN",
             re.compile(
-                rf"{target}.{{0,360}}\b(?:was|were|is|are)\s+wrongly\s+decided\b",
+                rf"{target}.{{0,420}}\b(?:was|were|is|are)\s+wrongly\s+decided\b",
                 flags,
             ),
         ),
@@ -316,7 +318,14 @@ def _action_patterns(
         (
             "LIMIT",
             re.compile(
-                rf"\b(?:find|finds|found)\b.{{0,120}}\birrelevant\b.{{0,180}}{target}",
+                rf"\b(?:find|finds|found)\b.{{0,160}}\birrelevant\b.{{0,240}}{target}",
+                flags,
+            ),
+        ),
+        (
+            "LIMIT",
+            re.compile(
+                rf"\bstrictly\s+based\b.{{0,240}}\bfacts?\b.{{0,260}}{target}",
                 flags,
             ),
         ),
@@ -390,7 +399,15 @@ def _action_patterns(
         (
             "APPLY",
             re.compile(
-                rf"{target}.{{0,180}}\bset\s+forth\s+(?:a|the)\s+framework\b",
+                rf"{target}.{{0,240}}\bset\s+forth\s+(?:a|the)\s+framework\b",
+                flags,
+            ),
+        ),
+        (
+            "APPLY",
+            re.compile(
+                rf"{target}.{{0,220}}\b(?:factors?|principles?|test)\b.{{0,120}}"
+                rf"\b(?:guide|guides|guided)\s+our\s+analysis\b",
                 flags,
             ),
         ),
@@ -409,6 +426,57 @@ def _action_patterns(
             ),
         ),
     ]
+
+
+def _mask_target_holding_content(
+    text: str,
+    *,
+    target_pattern: re.Pattern[str],
+) -> tuple[str, list[str]]:
+    """Mask propositions attributed to the target authority.
+
+    The mask runs over the entire relation context so treatment cues can span
+    sentence boundaries without reinterpreting the content of a prior holding.
+    """
+    value = text
+    propositions: list[str] = []
+
+    matches = list(target_pattern.finditer(value))
+    replacements: list[tuple[int, int, str]] = []
+
+    for target_match in matches:
+        tail = value[target_match.start():]
+        holder = re.search(
+            r"(?:,\s*)?(?:this\s+Court|the\s+Court)?\s*"
+            r"(?:had\s+)?held\s+(?:that\s+)?",
+            tail,
+            re.IGNORECASE,
+        )
+        if holder is None or holder.start() > 140:
+            continue
+
+        prop_start = target_match.start() + holder.end()
+
+        sentence_end = re.search(
+            r"(?<=[.!?])\s+(?=[A-Z\"'])",
+            value[prop_start:],
+        )
+        if sentence_end is None:
+            prop_end = len(value)
+        else:
+            prop_end = prop_start + sentence_end.start()
+
+        proposition = value[prop_start:prop_end].strip()
+        if proposition:
+            propositions.append(proposition)
+            replacements.append(
+                (prop_start, prop_end, " [ATTRIBUTED_TARGET_PROPOSITION] ")
+            )
+
+    for start, end, replacement in reversed(replacements):
+        value = value[:start] + replacement + value[end:]
+
+    return value, propositions
 
 
 def _collect_actions(
@@ -496,41 +564,21 @@ def extract_structured_relation(
             abstention_reason="target_absent",
         ).to_dict()
 
-    chunks = _target_chunks(
+    treatment_text, attributed_props = _mask_target_holding_content(
         text,
+        target_pattern=target_pattern,
+    )
+    owner = (
+        "TARGET_AUTHORITY"
+        if attributed_props
+        else "CURRENT_COURT"
+    )
+
+    all_actions, all_cues = _collect_actions(
+        treatment_text,
         target_citation=target_citation,
         target_term=target_term,
-        neighbor_count=1,
     )
-    if not chunks:
-        chunks = [text]
-
-    all_actions: list[str] = []
-    all_cues: list[str] = []
-    attributed_props: list[str] = []
-    owner = "CURRENT_COURT"
-
-    for chunk in chunks:
-        treatment_text, proposition = _strip_attributed_holding_content(
-            chunk,
-            target_pattern=target_pattern,
-        )
-        if proposition:
-            owner = "TARGET_AUTHORITY"
-            if proposition not in attributed_props:
-                attributed_props.append(proposition)
-
-        actions, cues = _collect_actions(
-            treatment_text,
-            target_citation=target_citation,
-            target_term=target_term,
-        )
-        for action in actions:
-            if action not in all_actions:
-                all_actions.append(action)
-        for cue in cues:
-            if cue not in all_cues:
-                all_cues.append(cue)
 
     relation, confidence = _relation_from_actions(all_actions)
 
