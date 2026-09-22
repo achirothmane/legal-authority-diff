@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "legal-authority-diff"
-version = "0.10.0"
+version = "0.11.0"
 description = "Differential regression testing for legal AI authority, citations, and claim support."
 readme = "README.md"
 requires-python = ">=3.10"
@@ -21,12 +21,14 @@ semantic = [
   "torch>=2.2,<3",
   "transformers>=4.45,<5"
 ]
+llm = ["openai>=3.17,<4"]
 
 [project.scripts]
 legal-diff = "legal_authority_diff.cli:main"
 legal-enrich-citations = "legal_authority_diff.courtlistener:main"
 legal-benchmark-support = "legal_authority_diff.benchmark:main"
 legal-benchmark-semantic = "legal_authority_diff.semantic_benchmark:main"
+legal-extract-relations-v011 = "legal_authority_diff.openai_relation_v011:main"
 
 [tool.setuptools.packages.find]
 where = ["src"]
