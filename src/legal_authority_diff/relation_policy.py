@@ -1,7 +1,7 @@
-"""V0.8 relation-aware differential policy.
+"""V0.9 relation-aware differential policy.
 
 This policy is experimental and intentionally separate from the mandatory core
-gate. It uses V0.8's target-aware precedent relationship as a guardrail around
+gate. It uses target-scoped precedent relationship as a guardrail around
 the V0.7 authority-role signal.
 """
 
@@ -29,8 +29,8 @@ def classify_relation_aware_transition(
       not a model regression;
     - explicit affirmative use/reaffirmation can suppress a role-only downgrade,
       but never rescues a candidate that fails lexical support;
-    - distinguish/limit relationships are UNKNOWN because proposition-level
-      consequences depend on facts and claim scope;
+    - distinguish/limit and mixed/conflicting relationships are UNKNOWN because
+      proposition-level consequences depend on facts and claim scope;
     - mention-only/unknown relationships fall back to V0.7 behavior.
     """
     baseline_supported = float(baseline_score) >= float(lexical_threshold)
@@ -47,10 +47,17 @@ def classify_relation_aware_transition(
             "candidate_relation": candidate_relation,
         }
 
-    if candidate_relation == "DISTINGUISHES_OR_LIMITS":
+    if candidate_relation in {
+        "DISTINGUISHES_OR_LIMITS",
+        "MIXED_OR_CONFLICTING",
+    }:
         return {
             "classification": "UNKNOWN",
-            "reason": "distinguished_or_limited_authority",
+            "reason": (
+                "mixed_or_conflicting_relation"
+                if candidate_relation == "MIXED_OR_CONFLICTING"
+                else "distinguished_or_limited_authority"
+            ),
             "baseline_score": baseline_score,
             "candidate_score": candidate_score,
             "baseline_role": baseline_role,
