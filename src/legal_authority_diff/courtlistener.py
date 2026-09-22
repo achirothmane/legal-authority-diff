@@ -23,6 +23,8 @@ from urllib.error import HTTPError, URLError
 from urllib.parse import urlencode
 from urllib.request import Request, urlopen
 
+from .support import evaluate_phrase_contract, html_to_text
+
 
 ENDPOINT = "https://www.courtlistener.com/api/rest/v4/citation-lookup/"
 DEFAULT_TOKEN_ENV = "COURTLISTENER_TOKEN"
@@ -86,7 +88,7 @@ def lookup_citation(
     headers = {
         "Accept": "application/json",
         "Content-Type": "application/x-www-form-urlencoded",
-        "User-Agent": "legal-authority-diff/0.3",
+        "User-Agent": "legal-authority-diff/0.4",
     }
     if token:
         headers["Authorization"] = f"Token {token}"
@@ -196,6 +198,111 @@ def resolve_authority_metadata(
     enriched["docket_id"] = docket.get("docket_id")
     enriched["docket_number"] = docket.get("docket_number")
     enriched["precedential_status"] = cluster.get("precedential_status")
+    enriched["sub_opinions"] = cluster.get("sub_opinions") or []
+    return enriched
+
+
+def fetch_opinion_text(
+    opinion_url: str,
+    *,
+    token: str,
+    opener: Callable[..., Any] = urlopen,
+    timeout: float = 20.0,
+) -> str:
+    """Fetch CourtListener opinion text, preferring html_with_citations."""
+    request = Request(
+        opinion_url,
+        headers={
+            "Authorization": f"Token {token}",
+            "Accept": "application/json",
+            "User-Agent": "legal-authority-diff/0.4",
+        },
+        method="GET",
+    )
+    data = _request_json(request, opener=opener, timeout=timeout)
+    if not isinstance(data, dict):
+        raise CourtListenerError("CourtListener opinion response was not an object")
+
+    html_value = data.get("html_with_citations")
+    if isinstance(html_value, str) and html_value.strip():
+        return html_to_text(html_value)
+
+    for field in ("html", "html_lawbox", "html_columbia", "html_anon_2020"):
+        value = data.get(field)
+        if isinstance(value, str) and value.strip():
+            return html_to_text(value)
+
+    plain = data.get("plain_text")
+    if isinstance(plain, str) and plain.strip():
+        return plain
+
+    raise CourtListenerError("CourtListener opinion has no usable text field")
+
+
+def resolve_support_evidence(
+    lookup: dict[str, Any],
+    *,
+    contract: dict[str, Any] | None,
+    token: str | None,
+    opener: Callable[..., Any] = urlopen,
+    timeout: float = 20.0,
+) -> dict[str, Any]:
+    """Evaluate an optional support contract against live opinion text."""
+    enriched = copy.deepcopy(lookup)
+    if not isinstance(contract, dict):
+        return enriched
+
+    opinion_refs = enriched.get("sub_opinions") or []
+    if (
+        enriched.get("status") != 200
+        or enriched.get("authority_metadata_state") != "RESOLVED"
+        or not token
+        or not opinion_refs
+    ):
+        enriched["support_verification"] = {
+            "state": "UNRESOLVED",
+            "support": "unknown",
+            "reason": "Opinion text could not be resolved for the support contract.",
+        }
+        return enriched
+
+    texts: list[str] = []
+    opinion_urls: list[str] = []
+    for item in opinion_refs:
+        if isinstance(item, str):
+            url = item
+        elif isinstance(item, dict):
+            url = item.get("resource_uri") or item.get("url")
+        else:
+            url = None
+
+        if not isinstance(url, str) or not url.startswith("http"):
+            continue
+
+        opinion_urls.append(url)
+        texts.append(
+            fetch_opinion_text(
+                url,
+                token=token,
+                opener=opener,
+                timeout=timeout,
+            )
+        )
+
+    if not texts:
+        enriched["support_verification"] = {
+            "state": "UNRESOLVED",
+            "support": "unknown",
+            "reason": "No usable CourtListener opinion text URL was available.",
+        }
+        return enriched
+
+    result = evaluate_phrase_contract("\n".join(texts), contract)
+    result["state"] = "RESOLVED"
+    result["provider"] = "courtlistener"
+    result["opinion_count"] = len(texts)
+    result["opinion_urls"] = opinion_urls
+    enriched["support_verification"] = result
     return enriched
 
 
@@ -278,6 +385,12 @@ def apply_lookup(
     if derived_status is not None:
         authority["status"] = derived_status
 
+    support_verification = lookup.get("support_verification")
+    if isinstance(support_verification, dict):
+        derived_support = support_verification.get("support")
+        if derived_support in {"supported", "partial", "unsupported", "contradicted"}:
+            enriched["support"] = derived_support
+
     authority["verification"] = {
         "provider": "courtlistener",
         "endpoint": "citation-lookup-v4",
@@ -297,6 +410,7 @@ def apply_lookup(
         "authority_rule": (
             "us-federal-appellate-v0.3" if derived_status is not None else None
         ),
+        "support_verification": support_verification,
     }
 
     return enriched
@@ -334,6 +448,19 @@ def enrich_records(
         lookup = lookup_citation(str(citation), token=token, opener=opener)
         lookup = resolve_authority_metadata(
             lookup,
+            token=token,
+            opener=opener,
+        )
+
+        context = record.get("context")
+        support_contract = (
+            context.get("support_contract")
+            if isinstance(context, dict)
+            else None
+        )
+        lookup = resolve_support_evidence(
+            lookup,
+            contract=support_contract,
             token=token,
             opener=opener,
         )
