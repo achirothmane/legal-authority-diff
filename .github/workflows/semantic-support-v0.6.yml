@@ -2,8 +2,6 @@ name: semantic-support-v0.6
 
 on:
   workflow_dispatch:
-  push:
-    branches: ["v0.6-semantic-support"]
 
 concurrency:
   group: semantic-support-v0.6
