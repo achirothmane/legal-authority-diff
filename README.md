@@ -445,3 +445,57 @@ https://github.com/othy19904-eng/legal-authority-diff/actions/runs/35722812150
 
 Full result:
 `benchmarks/authority-relation-v0.8/RESULTS.md`
+
+
+## Hard relation held-out falsification (V0.9)
+
+V0.9 tested whether target-scoped relation patterns could generalize the V0.8
+precedent guardrail to harder passages.
+
+A new 20-case set was frozen before its first execution, covering implicit
+application, fact-specific limitation, negative treatment short of overruling,
+mixed passages, nearby relation words about other authorities, mention-only, and
+target-absent controls.
+
+The untouched first run produced:
+
+```text
+9/20 correct
+accuracy=0.450
+anchor_failures=3
+```
+
+A generic PDF anchor-recovery improvement removed all three source-acquisition
+failures without changing labels or relation rules. The corrected replay was:
+
+```text
+11/20 correct
+accuracy=0.550
+anchor_failures=0
+
+AFFIRMATIVE_USE          6/7
+DISTINGUISHES_OR_LIMITS  2/5
+NEGATIVE_TREATMENT       2/4
+MIXED_OR_CONFLICTING     0/2
+MENTION_ONLY             0/1
+UNKNOWN                  1/1
+```
+
+The remaining misses are semantic/provenance failures rather than extraction
+failures. Most importantly, one historical description of what a precedent
+itself held was incorrectly read as the current court limiting that precedent.
+
+Therefore the target-scoped regex hypothesis is **not promoted**. We do not tune
+additional patterns on the held-out misses.
+
+To avoid degrading the V0.8 experiment, the V0.8 classifier/policy remain
+unchanged and the V0.9 attempt is isolated in separate experimental modules.
+
+First frozen run:
+https://github.com/othy19904-eng/legal-authority-diff/actions/runs/35725486526
+
+Corrected source-acquisition replay:
+https://github.com/othy19904-eng/legal-authority-diff/actions/runs/35725696246
+
+Full result:
+`benchmarks/authority-relation-v0.9/RESULTS.md`
