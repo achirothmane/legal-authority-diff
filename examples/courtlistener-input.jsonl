@@ -1,0 +1,3 @@
+{"case_id":"CL-001","claim":"Citation-existence smoke test only.","authority":{"citation":"576 U.S. 644"}}
+{"case_id":"CL-002","claim":"Citation-existence smoke test only.","authority":{"citation":"347 U.S. 483"}}
+{"case_id":"CL-003","claim":"Known not-found example from CourtListener documentation.","authority":{"citation":"1 U.S. 200"}}
