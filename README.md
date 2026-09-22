@@ -602,3 +602,29 @@ against the supplied source passage before policy use.
 
 Protocol:
 `benchmarks/schema-relation-v0.11/README.md`
+
+
+### Free interactive V0.11 development validation
+
+Because no API credits were available, the 16 already-observed V0.10 cases were
+also exercised as a **label-visible interactive development replay** inside
+ChatGPT.
+
+The authored V0.11 records were then validated in GitHub Actions against GovInfo
+source contexts:
+
+```text
+schema valid             16/16
+intended label fit       16/16
+usable non-abstentions   15/16
+validated abstentions     1
+```
+
+This is a schema/grounding exercise only. The expected labels were already known,
+so the 16/16 result is **not model accuracy and not held-out evidence**.
+
+Measured run:
+https://github.com/othy19904-eng/legal-authority-diff/actions/runs/35745115142
+
+Details:
+`benchmarks/schema-relation-v0.11/INTERACTIVE_RESULTS.md`
