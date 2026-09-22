@@ -75,3 +75,36 @@ print(
     f"baseline={kyllo['lexical_score']:.3f} "
     f"candidate={riley['lexical_score']:.3f}"
 )
+
+
+extra_challenges = [
+    (
+        "Mapp -> Miranda",
+        "Evidence obtained through an unconstitutional search or seizure is "
+        "inadmissible in a state criminal prosecution.",
+        "367 U.S. 643",
+        "384 U.S. 436",
+    ),
+    (
+        "Tinker -> T.L.O.",
+        "Public-school students retain First Amendment speech rights unless "
+        "officials can reasonably forecast substantial disruption.",
+        "393 U.S. 503",
+        "469 U.S. 325",
+    ),
+]
+
+for label, claim, baseline_citation, candidate_citation in extra_challenges:
+    baseline = evidence(claim, baseline_citation)
+    candidate = evidence(claim, candidate_citation)
+    comparison = compare_authority_roles(
+        baseline["role"]["role"],
+        candidate["role"]["role"],
+    )
+    print(
+        f"{label}: "
+        f"{baseline['role']['role']} -> {candidate['role']['role']} "
+        f"=> {comparison['classification']} "
+        f"(scores {baseline['lexical_score']:.3f} -> "
+        f"{candidate['lexical_score']:.3f})"
+    )
