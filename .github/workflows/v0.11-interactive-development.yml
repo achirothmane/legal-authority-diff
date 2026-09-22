@@ -2,8 +2,6 @@ name: v0.11-interactive-development
 
 on:
   workflow_dispatch:
-  push:
-    branches: ["v0.11-interactive-development-replay"]
 
 concurrency:
   group: v0.11-interactive-development
