@@ -243,13 +243,38 @@ The first baseline is intentionally simple: it retrieves the best one- or two-se
 
 The benchmark reports TP, TN, FP, FN, accuracy, precision, recall, false-positive rate, false-negative rate, and every misclassified pair. There is no quality gate yet: V0.5 is a measurement step used to decide what evidence layer is needed next.
 
+The reproducible V0.5 run uses official GovInfo U.S. Reports PDFs. CourtListener
+remains an optional source backend, but benchmark measurement is deliberately
+decoupled from third-party API quotas.
+
 Run:
 
 ```bash
-export COURTLISTENER_TOKEN="..."
+python -m pip install -e ".[benchmark]"
 legal-benchmark-support \
   benchmarks/real-claim-citation-v0.5/pairs.jsonl \
+  --source govinfo \
   --output /tmp/v0.5-report.json
 ```
 
-The benchmark evaluates whether the **source text supports the test proposition**. It does not decide whether the proposition remains current law today.
+First measured result at threshold `0.34`:
+
+```text
+TP=10 TN=9 FP=1 FN=0
+accuracy=0.950
+precision=0.909
+recall=1.000
+false-positive-rate=0.100
+false-negative-rate=0.000
+```
+
+The only error was the Gideon appointed-counsel claim paired with Miranda
+(`384 U.S. 436`), a useful hard negative because related criminal-procedure
+and counsel language fooled the lexical baseline. We do not tune the threshold
+on this same 20-pair set.
+
+Full result notes:
+`benchmarks/real-claim-citation-v0.5/RESULTS.md`
+
+The benchmark evaluates whether the **source text supports the test proposition**.
+It does not decide whether the proposition remains current law today.
