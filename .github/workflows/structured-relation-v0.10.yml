@@ -19,6 +19,8 @@ jobs:
         with:
           python-version: "3.11"
       - run: python -m pip install -e ".[benchmark]"
+      - name: Inspect structured development misses
+        run: python scripts/probe_v010_dev_contexts.py
       - name: Run V0.10 structured relation dev replay
         run: python scripts/benchmark_v010_structured_relation.py
       - uses: actions/upload-artifact@v4
