@@ -5,7 +5,7 @@ from pathlib import Path
 from legal_authority_diff.authority_relation_v09 import (
     classify_precedent_relation as classify_v09,
 )
-from legal_authority_diff.structured_relation import (
+from legal_authority_diff.structured_relation_v010 import (
     build_relation_context,
     extract_structured_relation,
 )
