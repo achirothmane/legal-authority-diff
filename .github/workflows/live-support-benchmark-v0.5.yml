@@ -28,7 +28,7 @@ jobs:
           legal-benchmark-support \
             benchmarks/real-claim-citation-v0.5/pairs.jsonl \
             --threshold 0.34 \
-            --delay 7 \
+            --delay 20 \
             --output /tmp/v0.5-report.json
       - name: Report confusion matrix and mistakes
         run: python scripts/report_v05_benchmark.py /tmp/v0.5-report.json
