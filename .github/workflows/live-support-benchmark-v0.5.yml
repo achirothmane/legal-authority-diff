@@ -2,6 +2,8 @@ name: live-support-benchmark-v0.5
 
 on:
   workflow_dispatch:
+  push:
+    branches: ["v0.5-support-benchmark"]
 
 concurrency:
   group: live-support-benchmark-v0.5
