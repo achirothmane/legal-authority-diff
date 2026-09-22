@@ -388,3 +388,60 @@ https://github.com/othy19904-eng/legal-authority-diff/actions/runs/35721271909
 
 Full result:
 `benchmarks/authority-role-v0.7/RESULTS.md`
+
+
+## Precedent relationship guardrail (V0.8)
+
+V0.8 addresses a false-block risk introduced by V0.7.
+
+A later case can legitimately apply or reaffirm an earlier precedent even when
+its local evidence looks like attributed prior authority. Blocking every
+`COURT_SELF_HOLDING -> ATTRIBUTED_PRIOR_AUTHORITY` transition would therefore
+be too aggressive.
+
+V0.8 adds a separate target-aware relationship axis:
+
+```text
+AFFIRMATIVE_USE
+DISTINGUISHES_OR_LIMITS
+NEGATIVE_TREATMENT
+MENTION_ONLY
+UNKNOWN
+```
+
+The frozen 12-challenge benchmark uses official GovInfo U.S. Reports PDFs.
+Its first execution scored 11/12 because one fixed anchor failed to resolve an
+OCR-split `Ba tson`. After adding a generic OCR-tolerant anchor resolver without
+changing the labels or relation rules, the replay scored:
+
+```text
+12/12
+
+AFFIRMATIVE_USE          5/5
+DISTINGUISHES_OR_LIMITS  2/2
+NEGATIVE_TREATMENT       1/1
+MENTION_ONLY             3/3
+UNKNOWN                  1/1
+```
+
+The corrected 12/12 is explicitly a replay, not an untouched held-out score.
+
+The experimental relation-aware policy then produced:
+
+```text
+affirmative-use role-only false blocks prevented = 5/5
+negative-treatment -> WORLD_CHANGE                = 1/1
+distinguish/limit -> UNKNOWN                      = 2/2
+```
+
+An affirmative-use signal never overrides a failed lexical support check. It only
+prevents the role layer from blocking a later case solely because that case cites
+the originating precedent.
+
+The policy remains experimental and is not yet part of the mandatory core gate.
+
+Measured run:
+https://github.com/othy19904-eng/legal-authority-diff/actions/runs/35722812150
+
+Full result:
+`benchmarks/authority-relation-v0.8/RESULTS.md`
