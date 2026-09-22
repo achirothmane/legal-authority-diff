@@ -101,3 +101,36 @@ Prototype / falsification stage. The next decision is not “add more features.�
 ## Disclaimer
 
 This software is experimental and does not provide legal advice. Legal conclusions require qualified human review.
+
+
+## CourtListener citation adapter (V0.2)
+
+V0.2 adds a first real legal-data adapter using CourtListener's citation lookup API.
+
+The adapter is deliberately narrow: it verifies **U.S. case-law citation existence and normalization**. It does not claim to verify proposition support, treatment, binding force, statutes, law-journal citations, `id.`, or `supra`.
+
+Set a CourtListener API token in the environment:
+
+```bash
+export COURTLISTENER_TOKEN="..."
+legal-enrich-citations examples/courtlistener-input.jsonl /tmp/enriched.jsonl
+```
+
+For experimentation only, unauthenticated requests can be enabled explicitly:
+
+```bash
+legal-enrich-citations examples/courtlistener-input.jsonl /tmp/enriched.jsonl --allow-unauthenticated
+```
+
+The adapter maps CourtListener results conservatively:
+
+- `200` → `exists: true`
+- `404` → `exists: false`
+- `300` ambiguous → unresolved, not false
+- `400` invalid/unsupported citation form → unresolved, not false
+- `429` throttled → unresolved, not false
+- no parsed citation → `UNPARSED`
+
+CourtListener evidence is stored under `authority.verification` so the original record remains inspectable.
+
+The point of this adapter is not to turn Legal Authority Diff into a legal database. It is to test whether real-source evidence makes differential regression output more useful than a generic LLM score.
