@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "legal-authority-diff"
-version = "0.9.0"
+version = "0.10.0"
 description = "Differential regression testing for legal AI authority, citations, and claim support."
 readme = "README.md"
 requires-python = ">=3.10"
