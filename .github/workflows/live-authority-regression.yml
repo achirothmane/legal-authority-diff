@@ -2,8 +2,6 @@ name: live-authority-regression
 
 on:
   workflow_dispatch:
-  push:
-    branches: ["v0.3-authority-regression"]
 
 jobs:
   live-authority-regression:
