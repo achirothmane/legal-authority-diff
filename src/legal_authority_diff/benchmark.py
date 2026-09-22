@@ -224,12 +224,76 @@ PRIMARY_OPINION_TYPES = {
 }
 
 
+def _case_name_tokens(value: str) -> set[str]:
+    ignored = {"v", "vs", "versus", "co", "company", "inc", "corp", "corporation"}
+    return {
+        token
+        for token in TOKEN_RE.findall(value.lower())
+        if token not in ignored and len(token) > 1
+    }
+
+
+def _disambiguate_lookup(
+    lookup: dict[str, Any],
+    *,
+    expected_case_name: str | None,
+) -> dict[str, Any]:
+    if lookup.get("status") != 300:
+        return lookup
+
+    clusters = [
+        cluster
+        for cluster in (lookup.get("clusters") or [])
+        if isinstance(cluster, dict)
+    ]
+    if not expected_case_name or not clusters:
+        return lookup
+
+    expected_tokens = _case_name_tokens(expected_case_name)
+    if not expected_tokens:
+        return lookup
+
+    scored: list[tuple[float, dict[str, Any]]] = []
+    for cluster in clusters:
+        actual = str(cluster.get("case_name") or "")
+        actual_tokens = _case_name_tokens(actual)
+        if not actual_tokens:
+            score = 0.0
+        else:
+            overlap = len(expected_tokens & actual_tokens)
+            score = overlap / len(expected_tokens | actual_tokens)
+        scored.append((score, cluster))
+
+    scored.sort(key=lambda item: item[0], reverse=True)
+    best_score, best_cluster = scored[0]
+    runner_up = scored[1][0] if len(scored) > 1 else 0.0
+
+    if best_score < 0.5 or (best_score - runner_up) < 0.15:
+        return lookup
+
+    resolved = dict(lookup)
+    resolved["status"] = 200
+    resolved["adapter_state"] = "FOUND_DISAMBIGUATED"
+    resolved["clusters"] = [best_cluster]
+    resolved["disambiguation"] = {
+        "expected_case_name": expected_case_name,
+        "selected_case_name": best_cluster.get("case_name"),
+        "score": round(best_score, 6),
+    }
+    return resolved
+
+
 def _resolve_source_text(
     citation: str,
     *,
     token: str,
+    expected_case_name: str | None = None,
 ) -> tuple[str, dict[str, Any]]:
     lookup = lookup_citation(citation, token=token)
+    lookup = _disambiguate_lookup(
+        lookup,
+        expected_case_name=expected_case_name,
+    )
     lookup = resolve_authority_metadata(lookup, token=token)
 
     if lookup.get("status") != 200:
@@ -274,6 +338,8 @@ def _resolve_source_text(
         "selected_opinion_count": len(selected),
         "selected_opinion_types": [doc.get("type") for doc in selected],
         "selected_opinion_urls": [doc.get("requested_url") for doc in selected],
+        "lookup_state": lookup.get("adapter_state"),
+        "disambiguation": lookup.get("disambiguation"),
     }
     return "\n".join(str(doc["text"]) for doc in selected), metadata
 
@@ -282,6 +348,7 @@ def _resolve_source_text_with_retry(
     citation: str,
     *,
     token: str,
+    expected_case_name: str | None = None,
     max_attempts: int = 5,
     backoff_seconds: float = 20.0,
 ) -> tuple[str, dict[str, Any]]:
@@ -289,7 +356,11 @@ def _resolve_source_text_with_retry(
 
     for attempt in range(1, max_attempts + 1):
         try:
-            return _resolve_source_text(citation, token=token)
+            return _resolve_source_text(
+                citation,
+                token=token,
+                expected_case_name=expected_case_name,
+            )
         except CourtListenerError as exc:
             last_error = exc
             message = str(exc)
@@ -313,13 +384,26 @@ def run_live_benchmark(
     results: list[dict[str, Any]] = []
 
     unique_citations: list[str] = []
+    citation_case_names: dict[str, str | None] = {}
     for row in rows:
         citation = str(row["citation"]).strip()
+        case_name = row.get("case_name")
+        case_name = str(case_name).strip() if case_name else None
+
         if citation not in unique_citations:
             unique_citations.append(citation)
+            citation_case_names[citation] = case_name
+        elif citation_case_names[citation] != case_name:
+            raise ValueError(
+                f"citation {citation!r} maps to inconsistent case names in benchmark"
+            )
 
     for index, citation in enumerate(unique_citations):
-        cache[citation] = _resolve_source_text_with_retry(citation, token=token)
+        cache[citation] = _resolve_source_text_with_retry(
+            citation,
+            token=token,
+            expected_case_name=citation_case_names[citation],
+        )
         if delay_seconds > 0 and index < len(unique_citations) - 1:
             time.sleep(delay_seconds)
 
