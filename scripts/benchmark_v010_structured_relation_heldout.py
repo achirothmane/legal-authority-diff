@@ -4,7 +4,7 @@ from pathlib import Path
 
 from legal_authority_diff.authority_relation_v09 import classify_precedent_relation
 from legal_authority_diff.govinfo import fetch_us_reports_text
-from legal_authority_diff.structured_relation import (
+from legal_authority_diff.structured_relation_v010 import (
     build_relation_context,
     extract_structured_relation,
 )
