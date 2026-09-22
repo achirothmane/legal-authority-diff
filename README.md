@@ -180,3 +180,54 @@ Both citations are real and found. The block is therefore caused by an authority
 This V0.3 test still does **not** independently verify proposition support, treatment/current validity, or every U.S. hierarchy rule. Those remain separate evidence layers.
 
 The authenticated end-to-end check is available as the manual GitHub Actions workflow `live-authority-regression`.
+
+
+## Source-text support regression (V0.4)
+
+V0.4 adds a deliberately narrow support-evidence layer. A golden-set record can define a deterministic support contract:
+
+```json
+{
+  "context": {
+    "support_contract": {
+      "required_phrases": ["same-sex couples", "marry"]
+    }
+  }
+}
+```
+
+For a resolved CourtListener citation, the adapter retrieves the linked opinion text and prefers `html_with_citations` when available. It then evaluates whether the configured textual anchors are present. The raw opinion text is not persisted in the enriched record; the evidence bundle stores the match result, missing/matched anchors, source hash, and source metadata.
+
+The support states are conservative:
+
+- all required anchors present → `supported`
+- some present → `partial`
+- none present → `unsupported`
+- source/contract cannot be resolved → `unknown`
+
+This is **not** general legal entailment and must not be interpreted as proof that a case legally supports a proposition. It is a deterministic regression primitive for benchmark/golden-set assertions.
+
+The live V0.4 check isolates support from citation existence and authority strength:
+
+- baseline: `576 U.S. 644`
+- candidate: `347 U.S. 483`
+- target: `ca2`
+- both citations resolve through CourtListener
+- both source courts resolve to `scotus`
+- both derive as `controlling`
+- baseline source satisfies the support contract
+- candidate source misses the support contract
+
+The resulting differential is:
+
+```text
+proposition_support:
+  supported -> unsupported
+
+RESULT: BLOCK
+```
+
+The authenticated live run passed end-to-end:
+https://github.com/othy19904-eng/legal-authority-diff/actions/runs/35716809115
+
+The manual GitHub Actions workflow is `live-proposition-support`.
