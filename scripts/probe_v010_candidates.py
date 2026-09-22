@@ -14,6 +14,17 @@ CASES = [
     ("Knick v. Township of Scott", "588 U.S. 180", ["Williamson County", "overrule", "overruled"]),
     ("Foster v. Chatman", "578 U.S. 488", ["Batson", "peremptory"]),
     ("Pena-Rodriguez v. Colorado", "580 U.S. 206", ["Tanner", "Warger", "distinguish"]),
+    ("Birchfield v. North Dakota", "579 U.S. 438", ["McNeely", "Schmerber", "breath test", "blood test"]),
+    ("Welch v. United States", "578 U.S. 120", ["Teague", "Johnson", "retroactive"]),
+    ("Mathis v. United States", "579 U.S. 500", ["Taylor", "Descamps", "elements"]),
+    ("Luis v. United States", "578 U.S. 5", ["Caplin", "Monsanto", "distinguish"]),
+    ("Buck v. Davis", "580 U.S. 100", ["Strickland", "Cronic", "ineffective"]),
+    ("Salman v. United States", "580 U.S. 39", ["Dirks", "gift", "tippee"]),
+    ("Beckles v. United States", "580 U.S. 256", ["Johnson", "advisory Guidelines", "void for vagueness"]),
+    ("Manuel v. Joliet", "580 U.S. 357", ["Albright", "Fourth Amendment", "pretrial detention"]),
+    ("McDonnell v. United States", "579 U.S. 550", ["Sun-Diamond", "official act", "question or matter"]),
+    ("Wearry v. Cain", "577 U.S. 385", ["Brady", "material", "suppressed"]),
+    ("Caetano v. Massachusetts", "577 U.S. 411", ["Heller", "stun gun", "Second Amendment"]),
 ]
 
 for case_name, citation, terms in CASES:
