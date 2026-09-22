@@ -1,0 +1,54 @@
+name: live-proposition-support
+
+on:
+  workflow_dispatch:
+
+jobs:
+  live-proposition-support:
+    runs-on: ubuntu-latest
+    env:
+      COURTLISTENER_TOKEN: ${{ secrets.COURTLISTENER_TOKEN }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - run: python -m pip install -e .
+      - name: Require CourtListener token
+        run: |
+          if [ -z "$COURTLISTENER_TOKEN" ]; then
+            echo "Missing repository secret: COURTLISTENER_TOKEN"
+            exit 2
+          fi
+      - name: Cool down CourtListener citation lookup throttle
+        run: sleep 20
+      - name: Enrich real Obergefell baseline
+        run: |
+          legal-enrich-citations \
+            benchmarks/live-proposition-support/baseline.jsonl \
+            /tmp/baseline.support.jsonl \
+            --delay 0
+      - name: Respect CourtListener citation lookup throttle
+        run: sleep 7
+      - name: Enrich real Brown candidate
+        run: |
+          legal-enrich-citations \
+            benchmarks/live-proposition-support/candidate.jsonl \
+            /tmp/candidate.support.jsonl \
+            --delay 0
+      - name: Run proposition-support diff
+        run: |
+          set +e
+          legal-diff \
+            /tmp/baseline.support.jsonl \
+            /tmp/candidate.support.jsonl \
+            --json > /tmp/support-report.json
+          code=$?
+          set -e
+          test "$code" -eq 1
+      - name: Assert support-only regression caused BLOCK
+        run: |
+          python scripts/assert_live_proposition_support.py \
+            /tmp/baseline.support.jsonl \
+            /tmp/candidate.support.jsonl \
+            /tmp/support-report.json
