@@ -551,3 +551,5 @@ https://github.com/othy19904-eng/legal-authority-diff/actions/runs/35727772444
 
 Full result:
 `benchmarks/structured-relation-v0.10/RESULTS.md`
+
+The exact extractor used for the first V0.10 held-out run is preserved in `src/legal_authority_diff/structured_relation_v010_frozen.py`. A later unit-test-only boundary fix in the working experimental module does not replace or revise the recorded first-run score; the held-out runner remains pinned to the frozen snapshot.
