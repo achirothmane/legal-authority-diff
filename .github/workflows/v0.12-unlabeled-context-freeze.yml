@@ -1,0 +1,29 @@
+name: v0.12-unlabeled-context-freeze
+
+on:
+  workflow_dispatch:
+  push:
+    branches: ["v0.12-blinded-prediction-freeze"]
+
+concurrency:
+  group: v0.12-unlabeled-context-freeze
+  cancel-in-progress: true
+
+jobs:
+  freeze-contexts:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - run: python -m pip install -e ".[benchmark]"
+      - name: Build unlabeled contexts
+        run: python scripts/build_v012_unlabeled_contexts.py
+      - uses: actions/upload-artifact@v4
+        with:
+          name: v0.12-unlabeled-contexts
+          path: /tmp/v0.12-unlabeled-contexts.jsonl
