@@ -553,3 +553,52 @@ Full result:
 `benchmarks/structured-relation-v0.10/RESULTS.md`
 
 The exact extractor used for the first V0.10 held-out run is preserved in `src/legal_authority_diff/structured_relation_v010_frozen.py`. A later unit-test-only boundary fix in the working experimental module does not replace or revise the recorded first-run score; the held-out runner remains pinned to the frozen snapshot.
+
+
+## Schema-constrained relation extraction (V0.11)
+
+V0.10 improved on the observed development cases but collapsed back to 50% on
+a new held-out set. Instead of adding more phrase patterns, V0.11 separates
+model extraction from deterministic policy.
+
+The optional model extractor returns a strict evidence object:
+
+```text
+target authority
+proposition
+proposition owner
+current-court stance
+treatment
+claim consequence
+evidence spans
+confidence / abstention
+```
+
+Deterministic validation then checks the target citation, stance/treatment
+consistency, exact evidence grounding, and abstention state. Invalid or
+abstaining extraction becomes `UNKNOWN`; it cannot reach a blocking policy.
+
+The model does not emit `BLOCK`, `WORLD_CHANGE`, or any other CI verdict.
+
+A manual development workflow uses OpenAI Structured Outputs against the
+already-observed V0.10 set. That replay is development evidence only. V0.11
+cannot be promoted until a new unseen set is frozen and independently reviewed.
+
+Install the optional live extractor dependency:
+
+```bash
+python -m pip install -e ".[llm]"
+```
+
+Then a prepared JSONL context file can be processed with:
+
+```bash
+export OPENAI_API_KEY="..."
+legal-extract-relations-v011 input.jsonl output.jsonl
+```
+
+The live adapter uses `store=false` and validates every returned evidence span
+against the supplied source passage before policy use.
+
+Protocol:
+`benchmarks/schema-relation-v0.11/README.md`
