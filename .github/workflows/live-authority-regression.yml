@@ -22,14 +22,16 @@ jobs:
             echo "Missing repository secret: COURTLISTENER_TOKEN"
             exit 2
           fi
+      - name: Cool down shared CourtListener rate limit
+        run: sleep 20
       - name: Enrich real SCOTUS baseline
         run: |
           legal-enrich-citations \
             benchmarks/live-authority-regression/baseline.jsonl \
             /tmp/baseline.authority.jsonl \
             --delay 0
-      - name: Respect citation lookup throttle
-        run: sleep 1.2
+      - name: Respect CourtListener 10/min account throttle
+        run: sleep 7
       - name: Enrich real Ninth Circuit candidate
         run: |
           legal-enrich-citations \
