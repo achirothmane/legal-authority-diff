@@ -2,7 +2,7 @@ name: test
 
 on:
   push:
-    branches: ["main", "v0.1-diff-engine", "v0.1-falsification-suite"]
+    branches: ["main", "v0.1-diff-engine", "v0.1-falsification-suite", "v0.2-courtlistener-adapter"]
   pull_request:
 
 jobs:
