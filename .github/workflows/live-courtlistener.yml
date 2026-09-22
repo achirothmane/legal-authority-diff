@@ -1,0 +1,50 @@
+name: live-courtlistener-smoke
+
+on:
+  workflow_dispatch:
+
+jobs:
+  live-courtlistener-smoke:
+    runs-on: ubuntu-latest
+    env:
+      COURTLISTENER_TOKEN: ${{ secrets.COURTLISTENER_TOKEN }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - run: python -m pip install -e .
+      - name: Require CourtListener token
+        run: |
+          if [ -z "$COURTLISTENER_TOKEN" ]; then
+            echo "Missing repository secret: COURTLISTENER_TOKEN"
+            exit 2
+          fi
+      - name: Enrich baseline from live CourtListener
+        run: |
+          legal-enrich-citations \
+            benchmarks/live-courtlistener/baseline.jsonl \
+            /tmp/baseline.enriched.jsonl \
+            --delay 0
+      - name: Enrich candidate from live CourtListener
+        run: |
+          legal-enrich-citations \
+            benchmarks/live-courtlistener/candidate.jsonl \
+            /tmp/candidate.enriched.jsonl \
+            --delay 0
+      - name: Run end-to-end diff
+        run: |
+          set +e
+          legal-diff \
+            /tmp/baseline.enriched.jsonl \
+            /tmp/candidate.enriched.jsonl \
+            --json > /tmp/report.json
+          code=$?
+          set -e
+          test "$code" -eq 1
+      - name: Assert real-source evidence caused BLOCK
+        run: |
+          python scripts/assert_live_courtlistener_smoke.py \
+            /tmp/baseline.enriched.jsonl \
+            /tmp/candidate.enriched.jsonl \
+            /tmp/report.json

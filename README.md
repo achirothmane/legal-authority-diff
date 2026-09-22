@@ -116,11 +116,7 @@ export COURTLISTENER_TOKEN="..."
 legal-enrich-citations examples/courtlistener-input.jsonl /tmp/enriched.jsonl
 ```
 
-For experimentation only, unauthenticated requests can be enabled explicitly:
-
-```bash
-legal-enrich-citations examples/courtlistener-input.jsonl /tmp/enriched.jsonl --allow-unauthenticated
-```
+CourtListener's citation-lookup endpoint requires authentication in the live smoke environment. The adapter therefore fails closed when `COURTLISTENER_TOKEN` is missing.
 
 The adapter maps CourtListener results conservatively:
 
@@ -134,3 +130,12 @@ The adapter maps CourtListener results conservatively:
 CourtListener evidence is stored under `authority.verification` so the original record remains inspectable.
 
 The point of this adapter is not to turn Legal Authority Diff into a legal database. It is to test whether real-source evidence makes differential regression output more useful than a generic LLM score.
+
+
+### Live end-to-end smoke test
+
+The repository includes a manual GitHub Actions workflow named `live-courtlistener-smoke`. It checks a real citation that CourtListener documents as found (`576 U.S. 644`) against its documented not-found example (`1 U.S. 200`), enriches both records from the live API, and requires Legal Authority Diff to return `BLOCK`.
+
+Add a repository Actions secret named `COURTLISTENER_TOKEN`, then run **Actions → live-courtlistener-smoke → Run workflow**.
+
+The live check is kept separate from ordinary CI because external API availability and credentials should not make deterministic unit tests flaky.
