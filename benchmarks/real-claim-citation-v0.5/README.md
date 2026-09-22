@@ -28,3 +28,23 @@ legal-benchmark-support \
 ```
 
 A benchmark label is a test fixture for this experimental engineering project, not legal advice.
+
+
+## Source backend
+
+The reproducible V0.5 run uses official GovInfo U.S. Reports PDFs rather than a
+third-party case-law API. This separates **source acquisition** from the
+**support verifier** and avoids making benchmark results depend on CourtListener
+account quotas.
+
+Install the benchmark extra before running:
+
+```bash
+python -m pip install -e ".[benchmark]"
+legal-benchmark-support \
+  benchmarks/real-claim-citation-v0.5/pairs.jsonl \
+  --source govinfo \
+  --output /tmp/v0.5-report.json
+```
+
+CourtListener remains available as an optional source backend for comparison.
