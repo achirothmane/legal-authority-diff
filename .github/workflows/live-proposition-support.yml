@@ -2,8 +2,6 @@ name: live-proposition-support
 
 on:
   workflow_dispatch:
-  push:
-    branches: ["v0.4-proposition-support"]
 
 jobs:
   live-proposition-support:
