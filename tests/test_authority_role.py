@@ -2,6 +2,7 @@ import unittest
 
 from legal_authority_diff.authority_role import (
     classify_authority_role,
+    classify_window_in_source,
     compare_authority_roles,
 )
 
@@ -37,6 +38,18 @@ class AuthorityRoleTests(unittest.TestCase):
             "As we held in Gideon v. Wainwright, 372 U.S. 335, counsel is fundamental."
         )
         self.assertEqual(result["role"], "ATTRIBUTED_PRIOR_AUTHORITY")
+
+    def test_context_recovers_split_law_review_abbreviation(self):
+        source = (
+            "The bibliography cites Birzon, The Right to Counsel, "
+            "14 Buffalo L. Rev. 1, for historical discussion."
+        )
+        window = (
+            "The bibliography cites Birzon, The Right to Counsel, "
+            "14 Buffalo L."
+        )
+        result = classify_window_in_source(source, window, context_chars=40)
+        self.assertEqual(result["role"], "SECONDARY_SOURCE")
 
     def test_unknown_does_not_guess(self):
         result = classify_authority_role(
