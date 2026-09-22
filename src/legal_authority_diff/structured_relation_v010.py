@@ -271,7 +271,7 @@ def _action_patterns(
         (
             "OVERRULE",
             re.compile(
-                rf"\bwe\s+(?:therefore\s+)?overrule\b.{{0,90}}{target}",
+                rf"\bwe\s+(?:therefore\s+)?overrule\b[^.;:]{{0,90}}{target}",
                 flags,
             ),
         ),
