@@ -21,3 +21,9 @@ jobs:
       - run: python -m pip install -e ".[benchmark]"
       - name: Run real authority-role provenance check
         run: python scripts/assert_v07_authority_role.py
+      - name: Run paired role-aware differential benchmark
+        run: python scripts/benchmark_v07_role_diff.py
+      - uses: actions/upload-artifact@v4
+        with:
+          name: v0.7-role-aware-report
+          path: /tmp/v0.7-role-aware-report.json
