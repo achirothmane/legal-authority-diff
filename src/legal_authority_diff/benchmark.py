@@ -303,7 +303,9 @@ def _resolve_source_text(
         )
 
     opinion_refs = lookup.get("sub_opinions") or []
-    documents: list[dict[str, Any]] = []
+    fallback: dict[str, Any] | None = None
+    selected: dict[str, Any] | None = None
+    fetched_count = 0
 
     for item in opinion_refs:
         if isinstance(item, str):
@@ -317,31 +319,35 @@ def _resolve_source_text(
             continue
 
         doc = fetch_opinion_document(url, token=token)
+        fetched_count += 1
         doc["requested_url"] = url
-        documents.append(doc)
 
-    if not documents:
+        if fallback is None:
+            fallback = doc
+
+        opinion_type = str(doc.get("type") or "").strip().lower()
+        if opinion_type in PRIMARY_OPINION_TYPES:
+            selected = doc
+            break
+
+    if selected is None:
+        selected = fallback
+
+    if selected is None:
         raise CourtListenerError(f"citation {citation!r} has no usable opinion text")
-
-    primary = [
-        doc
-        for doc in documents
-        if str(doc.get("type") or "").strip().lower() in PRIMARY_OPINION_TYPES
-    ]
-    selected = primary if primary else documents[:1]
 
     metadata = {
         "citation": citation,
         "source_court_id": lookup.get("source_court_id"),
         "precedential_status": lookup.get("precedential_status"),
-        "opinion_count": len(documents),
-        "selected_opinion_count": len(selected),
-        "selected_opinion_types": [doc.get("type") for doc in selected],
-        "selected_opinion_urls": [doc.get("requested_url") for doc in selected],
+        "opinion_count_fetched": fetched_count,
+        "selected_opinion_count": 1,
+        "selected_opinion_types": [selected.get("type")],
+        "selected_opinion_urls": [selected.get("requested_url")],
         "lookup_state": lookup.get("adapter_state"),
         "disambiguation": lookup.get("disambiguation"),
     }
-    return "\n".join(str(doc["text"]) for doc in selected), metadata
+    return str(selected["text"]), metadata
 
 
 def _resolve_source_text_with_retry(
