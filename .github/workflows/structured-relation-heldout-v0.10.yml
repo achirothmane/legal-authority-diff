@@ -1,0 +1,25 @@
+name: structured-relation-heldout-v0.10
+
+on:
+  workflow_dispatch:
+
+concurrency:
+  group: structured-relation-heldout-v0.10
+  cancel-in-progress: true
+
+jobs:
+  heldout:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - run: python -m pip install -e ".[benchmark]"
+      - name: Run frozen V0.10 structured relation held-out
+        run: python scripts/benchmark_v010_structured_relation_heldout.py
+      - uses: actions/upload-artifact@v4
+        with:
+          name: v0.10-structured-relation-heldout
+          path: /tmp/v0.10-structured-relation-heldout.json
