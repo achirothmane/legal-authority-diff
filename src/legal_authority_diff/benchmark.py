@@ -11,7 +11,6 @@ from __future__ import annotations
 
 import argparse
 import json
-import math
 import os
 import re
 import statistics
@@ -22,7 +21,7 @@ from typing import Any
 
 from .courtlistener import (
     CourtListenerError,
-    fetch_opinion_text,
+    fetch_opinion_document,
     lookup_citation,
     resolve_authority_metadata,
 )
@@ -210,6 +209,21 @@ def _read_jsonl(path: str) -> list[dict[str, Any]]:
     return rows
 
 
+PRIMARY_OPINION_TYPES = {
+    "010combined",
+    "015unamimous",
+    "015unanimous",
+    "020lead",
+    "025plurality",
+    "combined-opinion",
+    "unanimous-opinion",
+    "lead-opinion",
+    "plurality-opinion",
+    "080onthemerits",
+    "on-the-merits",
+}
+
+
 def _resolve_source_text(
     citation: str,
     *,
@@ -224,8 +238,7 @@ def _resolve_source_text(
         )
 
     opinion_refs = lookup.get("sub_opinions") or []
-    texts: list[str] = []
-    urls: list[str] = []
+    documents: list[dict[str, Any]] = []
 
     for item in opinion_refs:
         if isinstance(item, str):
@@ -238,20 +251,30 @@ def _resolve_source_text(
         if not isinstance(url, str) or not url.startswith("http"):
             continue
 
-        urls.append(url)
-        texts.append(fetch_opinion_text(url, token=token))
+        doc = fetch_opinion_document(url, token=token)
+        doc["requested_url"] = url
+        documents.append(doc)
 
-    if not texts:
+    if not documents:
         raise CourtListenerError(f"citation {citation!r} has no usable opinion text")
+
+    primary = [
+        doc
+        for doc in documents
+        if str(doc.get("type") or "").strip().lower() in PRIMARY_OPINION_TYPES
+    ]
+    selected = primary if primary else documents[:1]
 
     metadata = {
         "citation": citation,
         "source_court_id": lookup.get("source_court_id"),
         "precedential_status": lookup.get("precedential_status"),
-        "opinion_count": len(texts),
-        "opinion_urls": urls,
+        "opinion_count": len(documents),
+        "selected_opinion_count": len(selected),
+        "selected_opinion_types": [doc.get("type") for doc in selected],
+        "selected_opinion_urls": [doc.get("requested_url") for doc in selected],
     }
-    return "\n".join(texts), metadata
+    return "\n".join(str(doc["text"]) for doc in selected), metadata
 
 
 def run_live_benchmark(
