@@ -628,3 +628,64 @@ https://github.com/othy19904-eng/legal-authority-diff/actions/runs/35745115142
 
 Details:
 `benchmarks/schema-relation-v0.11/INTERACTIVE_RESULTS.md`
+
+
+## Prediction-before-label freeze (V0.12)
+
+V0.12 adds a zero-cost leakage-reduction protocol after the label-visible V0.11
+development exercise.
+
+Twenty new source/target pairs were frozen with **no expected treatment labels**.
+Source context was then selected mechanically from GovInfo:
+
+```text
+first normalized target-term occurrence
+radius = 1,200 characters
+no manual passage substitution
+```
+
+Predictions were committed before any V0.12 gold-label file:
+
+```text
+prediction commit:
+bb18669692069de81ba037ba0f1643610ea4d037
+```
+
+Prediction distribution:
+
+```text
+AFFIRMATIVE_USE          11
+DISTINGUISHES_OR_LIMITS   2
+NEGATIVE_TREATMENT        1
+MENTION_ONLY              2
+UNKNOWN                    4
+```
+
+The four `UNKNOWN` rows are the four cases where the predeclared context rule
+failed to resolve the target term. They remain explicit abstentions; the system
+did not search for a more favorable passage.
+
+GitHub validation then produced:
+
+```text
+schema valid        20/20
+usable              16/20
+abstentions          4
+unresolved contexts  4
+```
+
+A separate adjudication packet is generated without prediction fields so a
+reviewer can assign gold labels before seeing the frozen predictions.
+
+No V0.12 accuracy is reported yet. The same assistant selected the pairs and may
+have legal background knowledge, so this is leakage reduction rather than a
+fully independent blinded study.
+
+Context freeze:
+https://github.com/othy19904-eng/legal-authority-diff/actions/runs/35747500066
+
+Prediction validation:
+https://github.com/othy19904-eng/legal-authority-diff/actions/runs/35748017302
+
+Protocol and result:
+`benchmarks/blinded-relation-v0.12/`
