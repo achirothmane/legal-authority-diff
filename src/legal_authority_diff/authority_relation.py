@@ -185,7 +185,13 @@ def _compile_target_patterns(
             flags,
         ),
         re.compile(
-            rf"{target}.{{0,90}}\b(?:is|was)\s+no\s+longer\s+controlling\b",
+            rf"{target}.{{0,120}}\b(?:is|was|are|were)\s+no\s+longer\s+"
+            rf"(?:controlling|binding|good\s+law)\b",
+            flags,
+        ),
+        re.compile(
+            rf"{target}.{{0,120}}\bshould\s+no\s+longer\s+be\s+regarded\s+"
+            rf"as\s+mandatory\b",
             flags,
         ),
         re.compile(
