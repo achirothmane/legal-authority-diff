@@ -1,0 +1,47 @@
+name: semantic-support-v0.6
+
+on:
+  workflow_dispatch:
+
+concurrency:
+  group: semantic-support-v0.6
+  cancel-in-progress: true
+
+jobs:
+  semantic-support:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      HF_HOME: ${{ github.workspace }}/.cache/huggingface
+      TOKENIZERS_PARALLELISM: "false"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - uses: actions/cache@v4
+        with:
+          path: .cache/huggingface
+          key: hf-nli-minilm2-l6-h768-v1
+      - name: Install CPU-only PyTorch
+        run: python -m pip install --index-url https://download.pytorch.org/whl/cpu "torch>=2.2,<3"
+      - name: Install semantic benchmark dependencies
+        run: python -m pip install -e ".[semantic]"
+      - name: Probe the V0.5 NEG-003 false positive
+        run: python scripts/probe_v05_neg003_semantic.py
+      - name: Run untouched V0.6 held-out benchmark
+        run: |
+          legal-benchmark-semantic \
+            benchmarks/semantic-v0.6/heldout.jsonl \
+            --model cross-encoder/nli-MiniLM2-L6-H768 \
+            --semantic-threshold 0.50 \
+            --lexical-threshold 0.34 \
+            --top-k 8 \
+            --max-sentences 2 \
+            --output /tmp/v0.6-semantic-report.json
+      - name: Report lexical vs semantic
+        run: python scripts/report_v06_semantic.py /tmp/v0.6-semantic-report.json
+      - uses: actions/upload-artifact@v4
+        with:
+          name: v0.6-semantic-heldout-report
+          path: /tmp/v0.6-semantic-report.json

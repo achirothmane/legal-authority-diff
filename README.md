@@ -278,3 +278,48 @@ Full result notes:
 
 The benchmark evaluates whether the **source text supports the test proposition**.
 It does not decide whether the proposition remains current law today.
+
+
+## Generic NLI falsification (V0.6)
+
+V0.6 tested whether a local Natural Language Inference layer could solve the failure
+exposed by V0.5: confusing related legal language with proposition support.
+
+The experiment froze its configuration before evaluating a new 20-pair held-out set:
+
+- local model: `cross-encoder/nli-MiniLM2-L6-H768`
+- entailment threshold: `0.50`
+- top 8 lexical candidate windows
+- 10 new supported pairs and 10 new topic-overlapping negatives
+- official GovInfo U.S. Reports PDFs
+
+It failed the intended falsification test.
+
+The known V0.5 false positive remained a false positive:
+
+```text
+Gideon appointed-counsel claim
+vs. Miranda, 384 U.S. 436
+
+expected: unsupported
+semantic: supported
+entailment: 0.865
+```
+
+On the untouched V0.6 held-out set:
+
+```text
+Frozen lexical V0.5: TP=10 TN=10 FP=0 FN=0  accuracy=1.000
+Semantic V0.6:       TP=10 TN=9  FP=1 FN=0  accuracy=0.950
+```
+
+The semantic layer fixed no lexical mistakes and introduced one new false positive.
+Accordingly, generic NLI is **not promoted into the core regression gate**.
+
+The engineering lesson is more specific than “semantic models do not work”: proposition
+support in legal sources needs evidence about the source's **authority role**—for example
+whether the language is the holding/rule being established, merely quoted, discussed,
+distinguished, or applied from another authority.
+
+Full frozen result:
+`benchmarks/semantic-v0.6/RESULTS.md`
