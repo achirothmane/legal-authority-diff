@@ -1,6 +1,6 @@
 import unittest
 
-from legal_authority_diff.structured_relation import extract_structured_relation
+from legal_authority_diff.structured_relation_v010 import extract_structured_relation
 
 
 class StructuredRelationTests(unittest.TestCase):
