@@ -1,0 +1,54 @@
+name: live-authority-regression
+
+on:
+  workflow_dispatch:
+  push:
+    branches: ["v0.3-authority-regression"]
+
+jobs:
+  live-authority-regression:
+    runs-on: ubuntu-latest
+    env:
+      COURTLISTENER_TOKEN: ${{ secrets.COURTLISTENER_TOKEN }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - run: python -m pip install -e .
+      - name: Require CourtListener token
+        run: |
+          if [ -z "$COURTLISTENER_TOKEN" ]; then
+            echo "Missing repository secret: COURTLISTENER_TOKEN"
+            exit 2
+          fi
+      - name: Enrich real SCOTUS baseline
+        run: |
+          legal-enrich-citations \
+            benchmarks/live-authority-regression/baseline.jsonl \
+            /tmp/baseline.authority.jsonl \
+            --delay 0
+      - name: Respect citation lookup throttle
+        run: sleep 1.2
+      - name: Enrich real Ninth Circuit candidate
+        run: |
+          legal-enrich-citations \
+            benchmarks/live-authority-regression/candidate.jsonl \
+            /tmp/candidate.authority.jsonl \
+            --delay 0
+      - name: Run authority diff
+        run: |
+          set +e
+          legal-diff \
+            /tmp/baseline.authority.jsonl \
+            /tmp/candidate.authority.jsonl \
+            --json > /tmp/authority-report.json
+          code=$?
+          set -e
+          test "$code" -eq 1
+      - name: Assert real authority downgrade caused BLOCK
+        run: |
+          python scripts/assert_live_authority_regression.py \
+            /tmp/baseline.authority.jsonl \
+            /tmp/candidate.authority.jsonl \
+            /tmp/authority-report.json
