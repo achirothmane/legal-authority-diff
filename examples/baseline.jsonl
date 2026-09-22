@@ -1,0 +1,3 @@
+{"case_id":"LAD-001","claim":"California law requires ...","authority":{"citation":"123 Cal. 4th 456","jurisdiction":"CA","court":"California Supreme Court","status":"controlling","treatment":"good_law","exists":true},"support":"supported"}
+{"case_id":"LAD-002","claim":"A second tested proposition","authority":{"citation":"111 Cal. App. 5th 22","jurisdiction":"CA","court":"California Court of Appeal","status":"persuasive","treatment":"good_law","exists":true},"support":"supported"}
+{"case_id":"LAD-003","claim":"A statute remains in force","authority":{"citation":"Cal. Example Code § 10","jurisdiction":"CA","court":"statute","status":"controlling","treatment":"good_law","exists":true},"support":"supported"}
