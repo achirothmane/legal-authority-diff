@@ -499,3 +499,55 @@ https://github.com/othy19904-eng/legal-authority-diff/actions/runs/35725696246
 
 Full result:
 `benchmarks/authority-relation-v0.9/RESULTS.md`
+
+
+## Structured relation extraction falsification (V0.10)
+
+V0.10 tested a deterministic structured frame after V0.9 showed that raw
+target-scoped relation patterns could not reliably separate a target precedent's
+own proposition from the current court's treatment of that precedent.
+
+On the already-observed V0.9 development set, the structured frame improved from
+11/20 to 15/20 and correctly fixed the historical-attribution failure that
+motivated the experiment.
+
+That improvement did **not** generalize.
+
+A new 16-case benchmark was frozen before first execution. The first independent
+held-out result was:
+
+```text
+V0.9 raw/resolved accuracy  = 0.500
+V0.10 raw/resolved accuracy = 0.500
+GOLD_SUSPECT rows           = 0
+
+AFFIRMATIVE_USE          5/9
+DISTINGUISHES_OR_LIMITS  0/4
+NEGATIVE_TREATMENT       1/1
+MENTION_ONLY             1/1
+UNKNOWN                  1/1
+```
+
+The predeclared advancement threshold was resolved accuracy >= 0.75, so V0.10
+fails its advancement gate.
+
+The historical target-holding trap remained safe, but Fernandez v. California
+produced a high-confidence false `AFFIRMATIVE_USE`: asking whether Randolph
+applies was confused with actually applying Randolph, even though the opinion
+then refused to extend Randolph.
+
+That is a discourse-role error, not a source-acquisition error.
+
+Accordingly, no held-out tuning is performed and the failed extractor is isolated
+as:
+
+`src/legal_authority_diff/structured_relation_v010.py`
+
+First held-out run:
+https://github.com/othy19904-eng/legal-authority-diff/actions/runs/35728903431
+
+Development replay:
+https://github.com/othy19904-eng/legal-authority-diff/actions/runs/35727772444
+
+Full result:
+`benchmarks/structured-relation-v0.10/RESULTS.md`
