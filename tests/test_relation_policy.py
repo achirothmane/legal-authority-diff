@@ -51,6 +51,17 @@ class RelationAwarePolicyTests(unittest.TestCase):
         )
         self.assertEqual(result["classification"], "UNKNOWN")
 
+    def test_mixed_relation_abstains(self):
+        result = classify_relation_aware_transition(
+            baseline_score=0.50,
+            candidate_score=0.45,
+            baseline_role="COURT_SELF_HOLDING",
+            candidate_role="ATTRIBUTED_PRIOR_AUTHORITY",
+            candidate_relation="MIXED_OR_CONFLICTING",
+        )
+        self.assertEqual(result["classification"], "UNKNOWN")
+        self.assertEqual(result["reason"], "mixed_or_conflicting_relation")
+
     def test_mention_only_falls_back_to_v07_role_regression(self):
         result = classify_relation_aware_transition(
             baseline_score=0.50,
