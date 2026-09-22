@@ -9,11 +9,12 @@ from legal_authority_diff.govinfo import fetch_us_reports_text
 def evidence(claim, citation):
     text, metadata = fetch_us_reports_text(citation)
     lexical = score_claim_against_source(claim, text)
-    role = classify_authority_role(lexical["window"])
+    role = classify_authority_role(lexical["window_full"])
     return {
         "citation": citation,
         "lexical_score": lexical["score"],
         "window": lexical["window"],
+        "window_full": lexical["window_full"],
         "role": role,
         "source": metadata,
     }
