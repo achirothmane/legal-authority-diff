@@ -2,6 +2,8 @@ name: schema-relation-v0.11-dev
 
 on:
   workflow_dispatch:
+  push:
+    branches: ["v0.11-live-model-run"]
 
 jobs:
   development-replay:
