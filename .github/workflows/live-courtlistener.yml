@@ -2,6 +2,8 @@ name: live-courtlistener-smoke
 
 on:
   workflow_dispatch:
+  push:
+    branches: ["v0.3-authority-regression"]
 
 jobs:
   live-courtlistener-smoke:
@@ -20,6 +22,8 @@ jobs:
             echo "Missing repository secret: COURTLISTENER_TOKEN"
             exit 2
           fi
+      - name: Probe authority metadata
+        run: python scripts/probe_authority_metadata.py
       - name: Enrich baseline from live CourtListener
         run: |
           legal-enrich-citations \
