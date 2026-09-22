@@ -1,0 +1,27 @@
+name: v0.11-interactive-development
+
+on:
+  workflow_dispatch:
+
+concurrency:
+  group: v0.11-interactive-development
+  cancel-in-progress: true
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - run: python -m pip install -e ".[benchmark]"
+      - name: Validate interactive development extractions
+        run: python scripts/validate_v011_interactive_development.py
+      - uses: actions/upload-artifact@v4
+        with:
+          name: v0.11-interactive-development-report
+          path: /tmp/v0.11-interactive-development-report.json
