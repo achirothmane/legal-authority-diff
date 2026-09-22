@@ -2,8 +2,6 @@ name: live-support-benchmark-v0.5
 
 on:
   workflow_dispatch:
-  push:
-    branches: ["v0.5-support-benchmark"]
 
 concurrency:
   group: live-support-benchmark-v0.5
@@ -28,3 +26,7 @@ jobs:
             --output /tmp/v0.5-report.json
       - name: Report confusion matrix and mistakes
         run: python scripts/report_v05_benchmark.py /tmp/v0.5-report.json
+      - uses: actions/upload-artifact@v4
+        with:
+          name: v0.5-govinfo-lexical-report
+          path: /tmp/v0.5-report.json
