@@ -161,3 +161,48 @@ def compare_authority_roles(before: str, after: str) -> dict[str, Any]:
         "before": before,
         "after": after,
     }
+
+
+def expand_evidence_context(
+    source_text: str,
+    window: str,
+    *,
+    context_chars: int = 320,
+) -> str:
+    """Expand a retrieved window inside the original source text.
+
+    Legal citations and abbreviations are frequently split by naive sentence
+    tokenization. Role classification therefore inspects a bounded amount of
+    original text around the retrieved window rather than trusting the display
+    window alone.
+    """
+    source = str(source_text or "")
+    needle = str(window or "")
+    if not source or not needle:
+        return needle
+
+    index = source.find(needle)
+    if index < 0:
+        return needle
+
+    radius = max(0, int(context_chars))
+    start = max(0, index - radius)
+    end = min(len(source), index + len(needle) + radius)
+    return source[start:end]
+
+
+def classify_window_in_source(
+    source_text: str,
+    window: str,
+    *,
+    context_chars: int = 320,
+) -> dict[str, Any]:
+    context = expand_evidence_context(
+        source_text,
+        window,
+        context_chars=context_chars,
+    )
+    result = classify_authority_role(context)
+    result["context"] = context
+    result["context_chars"] = max(0, int(context_chars))
+    return result
