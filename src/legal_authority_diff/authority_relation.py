@@ -13,6 +13,8 @@ law determination.
 from __future__ import annotations
 
 import re
+from collections import Counter
+from difflib import SequenceMatcher
 from typing import Any
 
 from .govinfo import parse_us_reports_citation
@@ -52,6 +54,67 @@ def _ocr_tolerant_anchor_pattern(anchor: str) -> re.Pattern[str]:
     return re.compile("".join(pieces), re.IGNORECASE)
 
 
+def _approximate_anchor_span(
+    source: str,
+    needle: str,
+    *,
+    min_score: float = 0.72,
+) -> tuple[int, int] | None:
+    """Resolve a benchmark anchor after PDF extraction changed spacing/wording.
+
+    This is a source-acquisition fallback, not a relation classifier. It uses a
+    bounded token window and requires both token overlap and sequence similarity.
+    """
+    source_matches = list(re.finditer(r"[a-z0-9]+", source.lower()))
+    anchor_tokens = re.findall(r"[a-z0-9]+", needle.lower())
+
+    if len(anchor_tokens) < 5 or len(source_matches) < len(anchor_tokens):
+        return None
+
+    source_tokens = [match.group(0) for match in source_matches]
+    anchor_counts = Counter(anchor_tokens)
+    anchor_total = sum(anchor_counts.values())
+
+    min_width = max(5, len(anchor_tokens) - 3)
+    max_width = len(anchor_tokens) + 5
+
+    best: tuple[float, int, int] | None = None
+
+    for width in range(min_width, max_width + 1):
+        if width > len(source_tokens):
+            continue
+
+        for start in range(0, len(source_tokens) - width + 1):
+            window = source_tokens[start:start + width]
+            window_counts = Counter(window)
+            overlap = sum(
+                min(count, window_counts.get(token, 0))
+                for token, count in anchor_counts.items()
+            )
+            recall = overlap / anchor_total
+            if recall < 0.60:
+                continue
+
+            sequence = SequenceMatcher(
+                None,
+                anchor_tokens,
+                window,
+                autojunk=False,
+            ).ratio()
+            score = 0.60 * recall + 0.40 * sequence
+
+            if best is None or score > best[0]:
+                best = (score, start, start + width)
+
+    if best is None or best[0] < min_score:
+        return None
+
+    _, start_token, end_token = best
+    start_char = source_matches[start_token].start()
+    end_char = source_matches[end_token - 1].end()
+    return start_char, end_char
+
+
 def extract_anchor_context(
     source_text: str,
     anchor: str,
@@ -68,10 +131,16 @@ def extract_anchor_context(
 
     if index < 0:
         fuzzy = _ocr_tolerant_anchor_pattern(needle).search(source)
-        if fuzzy is None:
+        if fuzzy is not None:
+            index = fuzzy.start()
+            match_length = fuzzy.end() - fuzzy.start()
+
+    if index < 0:
+        approximate = _approximate_anchor_span(source, needle)
+        if approximate is None:
             return ""
-        index = fuzzy.start()
-        match_length = fuzzy.end() - fuzzy.start()
+        index, approximate_end = approximate
+        match_length = approximate_end - index
 
     span = max(0, int(radius))
     start = max(0, index - span)
