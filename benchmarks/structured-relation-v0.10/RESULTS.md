@@ -206,3 +206,11 @@ Before any such model is trusted, a small attorney-adjudicated subset should be
 created so that the next benchmark does not rely only on engineering labels.
 
 This software remains experimental and is not legal advice.
+
+## Reproducibility note
+
+The exact first-heldout extractor is preserved as:
+
+`src/legal_authority_diff/structured_relation_v010_frozen.py`
+
+After the held-out result was recorded, the working experimental module received one narrow fix required by a unit test that predated the held-out run: a `we overrule ... TARGET` matcher may not cross a sentence boundary and accidentally attach an overruling of another case to the target. The first-heldout score was not rerun or replaced after that fix; the held-out runner is pinned to the frozen snapshot above.
