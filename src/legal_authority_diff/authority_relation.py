@@ -138,6 +138,26 @@ def _compile_target_patterns(
             rf"\b(?:applies?|governs?|controls?)\b",
             flags,
         ),
+        re.compile(
+            rf"\bwe\s+hold\b.{{0,160}}{target}",
+            flags,
+        ),
+        re.compile(
+            rf"\bin\s+light\s+of\s+{target}",
+            flags,
+        ),
+        re.compile(
+            rf"\bas\s+we\s+(?:stated|explained|held)\s+in\s+{target}",
+            flags,
+        ),
+        re.compile(
+            rf"{target}.{{0,100}}\bset\s+forth\s+(?:a|the)\s+framework\b",
+            flags,
+        ),
+        re.compile(
+            rf"{target}.{{0,120}}\b(?:guide|guides|guided)\s+our\s+analysis\b",
+            flags,
+        ),
     ]
 
     distinguish = [
@@ -162,6 +182,14 @@ def _compile_target_patterns(
         ),
         re.compile(
             rf"{target}.{{0,90}}\b(?:is|was)\s+limited\s+to\b",
+            flags,
+        ),
+        re.compile(
+            rf"{target}.{{0,120}}\b(?:provides?|provided)\s+no\s+support\b",
+            flags,
+        ),
+        re.compile(
+            rf"{target}.{{0,120}}\b(?:departs?|departed)\s+from\b",
             flags,
         ),
     ]
