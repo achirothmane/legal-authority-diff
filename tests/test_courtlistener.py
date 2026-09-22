@@ -5,8 +5,10 @@ from legal_authority_diff.courtlistener import (
     apply_lookup,
     enrich_records,
     infer_federal_authority_status,
+    fetch_opinion_text,
     lookup_citation,
     resolve_authority_metadata,
+    resolve_support_evidence,
 )
 
 
@@ -147,6 +149,79 @@ class AuthorityMetadataTests(unittest.TestCase):
         )
 
 
+class SupportEvidenceTests(unittest.TestCase):
+    def test_fetch_opinion_prefers_html_with_citations(self):
+        text = fetch_opinion_text(
+            "https://example.test/opinions/1/",
+            token="secret",
+            opener=opener_for(
+                {
+                    "html_with_citations": "<p>Same-sex <b>couples</b> may marry.</p>",
+                    "plain_text": "fallback",
+                }
+            ),
+        )
+        self.assertIn("Same-sex", text)
+        self.assertIn("couples", text)
+
+    def test_support_contract_resolves_against_opinion_text(self):
+        lookup = {
+            "status": 200,
+            "authority_metadata_state": "RESOLVED",
+            "sub_opinions": ["https://example.test/opinions/1/"],
+        }
+        result = resolve_support_evidence(
+            lookup,
+            contract={"required_phrases": ["same-sex couples", "marry"]},
+            token="secret",
+            opener=opener_for(
+                {
+                    "html_with_citations": (
+                        "<p>The opinion discusses same-sex couples and their right to marry.</p>"
+                    )
+                }
+            ),
+        )
+        support = result["support_verification"]
+        self.assertEqual(support["state"], "RESOLVED")
+        self.assertEqual(support["support"], "supported")
+
+    def test_support_contract_detects_unsupported_source(self):
+        lookup = {
+            "status": 200,
+            "authority_metadata_state": "RESOLVED",
+            "sub_opinions": ["https://example.test/opinions/2/"],
+        }
+        result = resolve_support_evidence(
+            lookup,
+            contract={"required_phrases": ["same-sex couples", "marry"]},
+            token="secret",
+            opener=opener_for(
+                {"plain_text": "This opinion concerns public school segregation."}
+            ),
+        )
+        self.assertEqual(
+            result["support_verification"]["support"],
+            "unsupported",
+        )
+
+    def test_support_contract_does_not_guess_without_opinion_text(self):
+        result = resolve_support_evidence(
+            {
+                "status": 200,
+                "authority_metadata_state": "RESOLVED",
+                "sub_opinions": [],
+            },
+            contract={"required_phrases": ["same-sex couples"]},
+            token="secret",
+            opener=opener_for({}),
+        )
+        self.assertEqual(
+            result["support_verification"]["support"],
+            "unknown",
+        )
+
+
 class ApplyLookupTests(unittest.TestCase):
     def test_200_sets_exists_true_and_preserves_evidence(self):
         record = {
@@ -199,6 +274,35 @@ class ApplyLookupTests(unittest.TestCase):
         self.assertEqual(
             verification["authority_rule"],
             "us-federal-appellate-v0.3",
+        )
+
+    def test_support_verification_updates_record_support(self):
+        record = {
+            "case_id": "A",
+            "authority": {"citation": "576 U.S. 644"},
+            "support": "unknown",
+        }
+        result = apply_lookup(
+            record,
+            {
+                "citation": "576 U.S. 644",
+                "status": 200,
+                "normalized_citations": ["576 U.S. 644"],
+                "clusters": [{"id": 10}],
+                "error_message": "",
+                "adapter_state": "FOUND",
+                "support_verification": {
+                    "state": "RESOLVED",
+                    "support": "supported",
+                    "matched_phrases": ["same-sex couples"],
+                    "missing_phrases": [],
+                },
+            },
+        )
+        self.assertEqual(result["support"], "supported")
+        self.assertEqual(
+            result["authority"]["verification"]["support_verification"]["state"],
+            "RESOLVED",
         )
 
     def test_404_sets_exists_false(self):
