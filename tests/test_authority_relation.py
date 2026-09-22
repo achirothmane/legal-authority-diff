@@ -122,6 +122,23 @@ class AuthorityRelationTests(unittest.TestCase):
         )
         self.assertIn("declines to overrule Miranda", context)
 
+    def test_anchor_context_tolerates_minor_wording_drift(self):
+        context = extract_anchor_context(
+            "Before. The Roberts test departs from historical principles because "
+            "the framework admits statements on a reliability finding. After.",
+            "The Roberts test departs from the historical principles identified above",
+            radius=10,
+        )
+        self.assertIn("Roberts test departs from historical principles", context)
+
+    def test_anchor_context_does_not_force_unrelated_approximate_match(self):
+        context = extract_anchor_context(
+            "The weather report discusses coastal winds and rainfall.",
+            "The Roberts test departs from the historical principles identified above",
+            radius=10,
+        )
+        self.assertEqual(context, "")
+
     def test_anchor_context_tolerates_ocr_split_inside_name(self):
         context = extract_anchor_context(
             "Held: Miller-El is entitled to prevail on his Ba tson claim and obtain relief.",
