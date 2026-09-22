@@ -14,6 +14,9 @@ authors = [
 ]
 dependencies = []
 
+[project.optional-dependencies]
+benchmark = ["pypdf>=5,<6"]
+
 [project.scripts]
 legal-diff = "legal_authority_diff.cli:main"
 legal-enrich-citations = "legal_authority_diff.courtlistener:main"
