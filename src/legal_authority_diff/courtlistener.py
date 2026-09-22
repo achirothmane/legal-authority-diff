@@ -225,11 +225,6 @@ def build_parser() -> argparse.ArgumentParser:
         help=f"Environment variable containing the CourtListener API token (default: {DEFAULT_TOKEN_ENV}).",
     )
     parser.add_argument(
-        "--allow-unauthenticated",
-        action="store_true",
-        help="Allow a request without an API token. Intended only for experimentation.",
-    )
-    parser.add_argument(
         "--delay",
         type=float,
         default=1.05,
@@ -242,9 +237,9 @@ def main(argv: list[str] | None = None) -> int:
     args = build_parser().parse_args(argv)
     token = os.environ.get(args.token_env)
 
-    if not token and not args.allow_unauthenticated:
+    if not token:
         print(
-            f"error: set {args.token_env} or pass --allow-unauthenticated for experimentation",
+            f"error: set {args.token_env}; CourtListener citation lookup requires authentication",
             file=sys.stderr,
         )
         return 2
