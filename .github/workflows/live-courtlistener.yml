@@ -2,6 +2,8 @@ name: live-courtlistener-smoke
 
 on:
   workflow_dispatch:
+  push:
+    branches: ["live-courtlistener-run"]
 
 jobs:
   live-courtlistener-smoke:
