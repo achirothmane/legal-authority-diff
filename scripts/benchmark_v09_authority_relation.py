@@ -2,7 +2,7 @@ import json
 from collections import Counter, defaultdict
 from pathlib import Path
 
-from legal_authority_diff.authority_relation import (
+from legal_authority_diff.authority_relation_v09 import (
     classify_precedent_relation,
     extract_anchor_context,
 )
