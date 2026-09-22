@@ -323,3 +323,68 @@ distinguished, or applied from another authority.
 
 Full frozen result:
 `benchmarks/semantic-v0.6/RESULTS.md`
+
+
+## Authority-role provenance (V0.7)
+
+V0.7 follows the V0.6 falsification result: generic semantic entailment could not
+reliably distinguish topical legal language from proposition support.
+
+Instead of asking only whether a passage is similar to or entails a claim, V0.7
+adds a conservative provenance question:
+
+> Is the retrieved support window the source case's own rule/holding language,
+> an attributed prior authority, secondary material, or unresolved?
+
+The current observable roles are:
+
+- `COURT_SELF_HOLDING`
+- `REPORTER_SYLLABUS_HOLDING`
+- `ATTRIBUTED_PRIOR_AUTHORITY`
+- `SECONDARY_SOURCE`
+- `UNKNOWN`
+
+The U.S. Reports syllabus is explicitly kept separate from a Court-authored
+holding.
+
+Authority role is additive. It can only create a regression when both baseline
+and candidate already clear the frozen lexical threshold and a primary-like
+baseline degrades to attributed/secondary evidence. Primary -> `UNKNOWN` is
+not forced into a regression.
+
+This recovers the one V0.5 lexical false positive:
+
+```text
+Gideon, 372 U.S. 335
+score=0.478
+REPORTER_SYLLABUS_HOLDING
+
+        ->
+
+Miranda, 384 U.S. 436
+score=0.365
+SECONDARY_SOURCE
+
+authority_role -> REGRESSION
+```
+
+On the paired V0.5 development benchmark:
+
+```text
+lexical-only: 9/10 regressions detected
+role-aware:  10/10 regressions detected
+identity controls: 0 false regressions
+```
+
+On the V0.6 replay set, both methods detect 10/10 and the identity controls again
+produce zero regressions. This replay is not a new untouched held-out result.
+
+The heuristic is **not promoted into the mandatory core gate yet**. Mapp and
+Tinker probes demonstrate that a single retrieved window cannot reliably recover
+every holding's provenance, so uncertain cases remain `UNKNOWN` or unchanged.
+
+Live V0.7 run:
+https://github.com/othy19904-eng/legal-authority-diff/actions/runs/35721271909
+
+Full result:
+`benchmarks/authority-role-v0.7/RESULTS.md`

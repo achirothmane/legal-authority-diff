@@ -95,6 +95,7 @@ def score_claim_against_source(claim: str, source_text: str) -> dict[str, Any]:
         "claim_recall": 0.0,
         "bigram_recall": 0.0,
         "window": "",
+        "window_full": "",
     }
 
     for window in windows:
@@ -118,6 +119,7 @@ def score_claim_against_source(claim: str, source_text: str) -> dict[str, Any]:
                 "claim_recall": round(claim_recall, 6),
                 "bigram_recall": round(bigram_recall, 6),
                 "window": window[:500],
+                "window_full": window,
             }
 
     return best

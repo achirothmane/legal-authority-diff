@@ -1,0 +1,27 @@
+name: authority-role-v0.7
+
+on:
+  workflow_dispatch:
+
+concurrency:
+  group: authority-role-v0.7
+  cancel-in-progress: true
+
+jobs:
+  authority-role:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - run: python -m pip install -e ".[benchmark]"
+      - name: Run real authority-role provenance check
+        run: python scripts/assert_v07_authority_role.py
+      - name: Run paired role-aware differential benchmark
+        run: python scripts/benchmark_v07_role_diff.py
+      - uses: actions/upload-artifact@v4
+        with:
+          name: v0.7-role-aware-report
+          path: /tmp/v0.7-role-aware-report.json
