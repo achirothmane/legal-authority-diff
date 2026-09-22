@@ -234,7 +234,8 @@ def _resolve_source_text(
 
     if lookup.get("status") != 200:
         raise CourtListenerError(
-            f"citation {citation!r} did not resolve with status 200"
+            f"citation {citation!r} did not resolve: "
+            f"status={lookup.get('status')} state={lookup.get('adapter_state')}"
         )
 
     opinion_refs = lookup.get("sub_opinions") or []
@@ -277,6 +278,30 @@ def _resolve_source_text(
     return "\n".join(str(doc["text"]) for doc in selected), metadata
 
 
+def _resolve_source_text_with_retry(
+    citation: str,
+    *,
+    token: str,
+    max_attempts: int = 5,
+    backoff_seconds: float = 20.0,
+) -> tuple[str, dict[str, Any]]:
+    last_error: CourtListenerError | None = None
+
+    for attempt in range(1, max_attempts + 1):
+        try:
+            return _resolve_source_text(citation, token=token)
+        except CourtListenerError as exc:
+            last_error = exc
+            message = str(exc)
+            throttled = "429" in message or "throttl" in message.lower()
+            if not throttled or attempt == max_attempts:
+                raise
+            time.sleep(backoff_seconds * attempt)
+
+    assert last_error is not None
+    raise last_error
+
+
 def run_live_benchmark(
     rows: list[dict[str, Any]],
     *,
@@ -294,7 +319,7 @@ def run_live_benchmark(
             unique_citations.append(citation)
 
     for index, citation in enumerate(unique_citations):
-        cache[citation] = _resolve_source_text(citation, token=token)
+        cache[citation] = _resolve_source_text_with_retry(citation, token=token)
         if delay_seconds > 0 and index < len(unique_citations) - 1:
             time.sleep(delay_seconds)
 
