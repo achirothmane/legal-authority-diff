@@ -57,6 +57,15 @@ class AuthorityRelationTests(unittest.TestCase):
         )
         self.assertEqual(result["relation"], "NEGATIVE_TREATMENT")
 
+    def test_procedure_no_longer_mandatory_is_negative_treatment(self):
+        result = classify_precedent_relation(
+            "Saucier v. Katz, 533 U.S. 194, should no longer be regarded as "
+            "mandatory in all cases.",
+            target_citation="533 U.S. 194",
+            target_term="Saucier",
+        )
+        self.assertEqual(result["relation"], "NEGATIVE_TREATMENT")
+
     def test_plain_historical_reference_is_mention_only(self):
         result = classify_precedent_relation(
             "In the wake of Miranda v. Arizona, 384 U.S. 436, Congress enacted "
