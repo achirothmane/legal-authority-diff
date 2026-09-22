@@ -3,16 +3,16 @@
 V0.9 failed because phrase-level patterns could not reliably answer a more basic
 question: whose proposition is being stated?
 
-V0.10 extracts a small discourse frame before assigning a relation:
+V0.10 extracts an evidence frame before assigning a relation:
 
     target authority
-        -> attribution owner
-        -> proposition span
-        -> current-court treatment cues
+        -> target resolution
+        -> proposition owner / attribution
+        -> current-court treatment actions
         -> relation
 
-The extractor is intentionally conservative. It can abstain and it keeps
-attributed holding content separate from treatment by the current court.
+The extractor is conservative. It can abstain and it keeps attributed holding
+content separate from treatment by the current court.
 """
 
 from __future__ import annotations
@@ -22,6 +22,7 @@ from dataclasses import asdict, dataclass
 from typing import Any
 
 from .authority_relation_v09 import (
+    _approximate_anchor_span,
     _citation_pattern,
     _ocr_tolerant_anchor_pattern,
     normalize_source_text,
@@ -29,8 +30,22 @@ from .authority_relation_v09 import (
 
 
 @dataclass
+class RelationContext:
+    text: str
+    anchor_found: bool
+    target_found_near_anchor: bool
+    target_distance_chars: int | None
+    target_resolution: str
+    gold_suspect_reason: str | None
+
+    def to_dict(self) -> dict[str, Any]:
+        return asdict(self)
+
+
+@dataclass
 class RelationFrame:
     target_present: bool
+    target_resolution: str
     attribution_owner: str
     attributed_proposition: str
     current_court_actions: list[str]
@@ -53,22 +68,136 @@ def _target_source(
     return "(?:" + "|".join(parts) + ")"
 
 
+def _target_pattern(
+    target_citation: str,
+    target_term: str | None,
+) -> re.Pattern[str]:
+    return re.compile(
+        _target_source(target_citation, target_term),
+        re.IGNORECASE,
+    )
+
+
 def _target_present(
     text: str,
     *,
     target_citation: str,
     target_term: str | None,
 ) -> bool:
-    pattern = re.compile(
-        _target_source(target_citation, target_term),
-        re.IGNORECASE,
+    return _target_pattern(target_citation, target_term).search(text) is not None
+
+
+def _anchor_span(
+    source: str,
+    anchor: str,
+) -> tuple[int, int] | None:
+    needle = normalize_source_text(anchor)
+    if not source or not needle:
+        return None
+
+    index = source.lower().find(needle.lower())
+    if index >= 0:
+        return index, index + len(needle)
+
+    fuzzy = _ocr_tolerant_anchor_pattern(needle).search(source)
+    if fuzzy is not None:
+        return fuzzy.start(), fuzzy.end()
+
+    return _approximate_anchor_span(source, needle)
+
+
+def build_relation_context(
+    source_text: str,
+    *,
+    anchor: str,
+    target_citation: str,
+    target_term: str | None,
+    radius: int = 320,
+    max_target_gap: int = 2400,
+) -> dict[str, Any]:
+    """Build a context that contains both the benchmark anchor and target.
+
+    V0.9 showed that an anchor can describe a precedent through short-form
+    citations after the full target name/citation has fallen just outside the
+    fixed radius. V0.10 expands only when the full target can be resolved near
+    the anchor. If it cannot, the example is flagged as potentially suspect
+    rather than silently forcing a relationship.
+    """
+    source = normalize_source_text(source_text)
+    span = _anchor_span(source, anchor)
+    if span is None:
+        return RelationContext(
+            text="",
+            anchor_found=False,
+            target_found_near_anchor=False,
+            target_distance_chars=None,
+            target_resolution="ANCHOR_NOT_FOUND",
+            gold_suspect_reason="anchor_not_found",
+        ).to_dict()
+
+    anchor_start, anchor_end = span
+    base_radius = max(0, int(radius))
+    start = max(0, anchor_start - base_radius)
+    end = min(len(source), anchor_end + base_radius)
+
+    target = _target_pattern(target_citation, target_term)
+    nearby_start = max(0, anchor_start - max_target_gap)
+    nearby_end = min(len(source), anchor_end + max_target_gap)
+    nearby = source[nearby_start:nearby_end]
+
+    candidates = list(target.finditer(nearby))
+    if not candidates:
+        return RelationContext(
+            text=source[start:end],
+            anchor_found=True,
+            target_found_near_anchor=False,
+            target_distance_chars=None,
+            target_resolution="TARGET_NOT_FOUND_NEAR_ANCHOR",
+            gold_suspect_reason=(
+                "expected relation requires target treatment but the full target "
+                "name/citation is not resolved near the benchmark anchor"
+            ),
+        ).to_dict()
+
+    absolute = [
+        (
+            nearby_start + match.start(),
+            nearby_start + match.end(),
+        )
+        for match in candidates
+    ]
+
+    def distance(item: tuple[int, int]) -> int:
+        target_start, target_end = item
+        if target_end < anchor_start:
+            return anchor_start - target_end
+        if target_start > anchor_end:
+            return target_start - anchor_end
+        return 0
+
+    target_start, target_end = min(absolute, key=distance)
+    target_distance = distance((target_start, target_end))
+
+    start = max(0, min(start, target_start - 220))
+    end = min(len(source), max(end, target_end + 220))
+
+    resolution = (
+        "TARGET_OVERLAPS_ANCHOR"
+        if target_distance == 0
+        else "TARGET_EXPANDED_INTO_CONTEXT"
     )
-    return pattern.search(text) is not None
+
+    return RelationContext(
+        text=source[start:end],
+        anchor_found=True,
+        target_found_near_anchor=True,
+        target_distance_chars=target_distance,
+        target_resolution=resolution,
+        gold_suspect_reason=None,
+    ).to_dict()
 
 
 def _sentenceish_chunks(text: str) -> list[str]:
-    # U.S. Reports PDF text can contain abbreviations such as U.S. and v.
-    # Use punctuation plus a capital/quote lookahead rather than splitting every period.
     parts = re.split(r"(?<=[.!?])\s+(?=[A-Z\"'])", text)
     return [part.strip() for part in parts if part.strip()]
 
@@ -81,10 +210,7 @@ def _target_chunks(
     neighbor_count: int = 1,
 ) -> list[str]:
     chunks = _sentenceish_chunks(text)
-    target = re.compile(
-        _target_source(target_citation, target_term),
-        re.IGNORECASE,
-    )
+    target = _target_pattern(target_citation, target_term)
 
     selected: list[str] = []
     for index, chunk in enumerate(chunks):
@@ -98,68 +224,13 @@ def _target_chunks(
     return selected
 
 
-ATTRIBUTED_HOLDING_PATTERNS = [
-    re.compile(
-        r"\b(?:specifically,\s*)?in\s+(?P<target>.+?),\s+"
-        r"(?:this\s+Court|the\s+Court)\s+(?:had\s+)?held\s+(?:that\s+)?"
-        r"(?P<prop>.+)",
-        re.IGNORECASE,
-    ),
-    re.compile(
-        r"(?P<target>.+?)\s+(?:held|stated|explained)\s+(?:that\s+)?"
-        r"(?P<prop>.+)",
-        re.IGNORECASE,
-    ),
-]
-
-CURRENT_COURT_AFFIRMATIVE = [
-    ("APPLY", re.compile(r"\bunder\b.{0,110}", re.IGNORECASE)),
-    ("APPLY", re.compile(r"\bin\s+light\s+of\b.{0,110}", re.IGNORECASE)),
-    ("APPLY", re.compile(r"\bas\s+we\s+(?:stated|explained|held)\s+in\b.{0,110}", re.IGNORECASE)),
-    ("APPLY", re.compile(r"\bwe\s+hold\b.{0,180}", re.IGNORECASE)),
-    ("APPLY", re.compile(r"\b(?:framework|rule|standard)\b.{0,100}\b(?:applies?|governs?|controls?)\b", re.IGNORECASE)),
-    ("APPLY", re.compile(r"\b(?:applies?|governs?|controls?)\b.{0,80}", re.IGNORECASE)),
-    ("KEEP", re.compile(r"\bdeclines?\s+to\s+overrule\b.{0,120}", re.IGNORECASE)),
-    ("KEEP", re.compile(r"\breaffirm(?:s|ed|ing)?\b.{0,120}", re.IGNORECASE)),
-]
-
-CURRENT_COURT_LIMIT = [
-    ("LIMIT", re.compile(r"\bdeclines?\s+to\s+extend\b.{0,120}", re.IGNORECASE)),
-    ("LIMIT", re.compile(r"\bin\s+contrast\s+to\b.{0,120}", re.IGNORECASE)),
-    ("LIMIT", re.compile(r"\bunlike\b.{0,120}", re.IGNORECASE)),
-    ("LIMIT", re.compile(r"\bdistinguish(?:ed|es|ing)?\b.{0,120}", re.IGNORECASE)),
-    ("LIMIT", re.compile(r"\bprovides?\s+no\s+support\b.{0,120}", re.IGNORECASE)),
-    ("LIMIT", re.compile(r"\bdeparts?\s+from\b.{0,120}", re.IGNORECASE)),
-    ("LIMIT", re.compile(r"\b(?:does|did)\s+not\s+(?:apply|mandate|control|govern|require)\b.{0,120}", re.IGNORECASE)),
-    ("LIMIT", re.compile(r"\birrelevant\s+to\b.{0,120}", re.IGNORECASE)),
-    ("LIMIT", re.compile(r"\bnot\s+relevant\s+to\b.{0,120}", re.IGNORECASE)),
-]
-
-CURRENT_COURT_NEGATIVE = [
-    ("OVERRULE", re.compile(r"\bshould\s+be\s+and\s+now\s+is\s+overruled\b", re.IGNORECASE)),
-    ("OVERRULE", re.compile(r"\bwe\s+(?:therefore\s+)?overrule\b.{0,140}", re.IGNORECASE)),
-    ("OVERRULE", re.compile(r"\b(?:is|are|was|were|has\s+been)\s+(?:expressly\s+)?overruled\b", re.IGNORECASE)),
-    ("ABROGATE", re.compile(r"\b(?:is|are|was|were|has\s+been)\s+abrogated\b", re.IGNORECASE)),
-    ("DISAPPROVE", re.compile(r"\b(?:is|are|was|were)\s+disapproved\b", re.IGNORECASE)),
-    ("WEAKEN", re.compile(r"\bno\s+longer\s+(?:controlling|binding|good\s+law)\b", re.IGNORECASE)),
-    ("WEAKEN", re.compile(r"\bshould\s+no\s+longer\s+be\s+regarded\s+as\s+mandatory\b", re.IGNORECASE)),
-]
-
-
 def _strip_attributed_holding_content(
     chunk: str,
     *,
     target_pattern: re.Pattern[str],
 ) -> tuple[str, str]:
-    """Return (remaining treatment text, attributed proposition).
-
-    If the chunk says that the target itself "held that X", X is proposition
-    content owned by the target authority. It must not be reinterpreted as the
-    current court limiting that target merely because X contains words such as
-    "does not require".
-    """
+    """Separate a target's historical holding from current-court treatment."""
     normalized = chunk.strip()
-
     target_match = target_pattern.search(normalized)
     if target_match is None:
         return normalized, ""
@@ -177,17 +248,174 @@ def _strip_attributed_holding_content(
 
     absolute_start = target_match.start() + holder.end()
     proposition = normalized[absolute_start:].strip()
-
-    # Keep text before the attributed proposition for treatment analysis. This
-    # preserves clauses such as "we now overrule X" that occur before it.
     remaining = normalized[:absolute_start].strip()
     return remaining, proposition
+
+
+def _action_patterns(
+    target_source: str,
+) -> list[tuple[str, re.Pattern[str]]]:
+    target = target_source
+    flags = re.IGNORECASE
+
+    return [
+        # Explicit negative treatment. Keep these target-linked.
+        (
+            "OVERRULE",
+            re.compile(
+                rf"{target}.{{0,180}}\bshould\s+be\s+and\s+now\s+is\s+overruled\b",
+                flags,
+            ),
+        ),
+        (
+            "OVERRULE",
+            re.compile(
+                rf"\bwe\s+(?:therefore\s+)?overrule\b.{{0,90}}{target}",
+                flags,
+            ),
+        ),
+        (
+            "OVERRULE",
+            re.compile(
+                rf"{target}.{{0,180}}\b(?:is|are|was|were|has\s+been)\s+"
+                rf"(?:expressly\s+)?overruled\b",
+                flags,
+            ),
+        ),
+        (
+            "WEAKEN",
+            re.compile(
+                rf"{target}.{{0,260}}\b(?:is|are|was|were)\s+no\s+longer\s+"
+                rf"(?:controlling|binding|good\s+law)\b",
+                flags,
+            ),
+        ),
+        (
+            "WEAKEN",
+            re.compile(
+                rf"{target}.{{0,320}}\bshould\s+no\s+longer\s+be\s+regarded\s+"
+                rf"as\s+mandatory\b",
+                flags,
+            ),
+        ),
+        (
+            "WEAKEN",
+            re.compile(
+                rf"{target}.{{0,360}}\b(?:was|were|is|are)\s+wrongly\s+decided\b",
+                flags,
+            ),
+        ),
+        # Limit/distinguish the target.
+        (
+            "LIMIT",
+            re.compile(
+                rf"\bdeclines?\s+to\s+extend\s+{target}",
+                flags,
+            ),
+        ),
+        (
+            "LIMIT",
+            re.compile(
+                rf"\b(?:find|finds|found)\b.{{0,120}}\birrelevant\b.{{0,180}}{target}",
+                flags,
+            ),
+        ),
+        (
+            "LIMIT",
+            re.compile(
+                rf"{target}.{{0,220}}\b(?:provides?|provided)\s+no\s+support\b",
+                flags,
+            ),
+        ),
+        (
+            "LIMIT",
+            re.compile(
+                rf"{target}.{{0,220}}\b(?:departs?|departed)\s+from\b",
+                flags,
+            ),
+        ),
+        (
+            "LIMIT",
+            re.compile(
+                rf"{target}.{{0,180}}\b(?:does|did)\s+not\s+"
+                rf"(?:apply|mandate|control|govern|require)\b",
+                flags,
+            ),
+        ),
+        (
+            "LIMIT",
+            re.compile(rf"\bin\s+contrast\s+to\s+{target}", flags),
+        ),
+        (
+            "LIMIT",
+            re.compile(rf"\bunlike\s+(?:in\s+)?{target}", flags),
+        ),
+        # Affirmative use / preservation.
+        (
+            "KEEP",
+            re.compile(
+                rf"\bdeclines?\s+to\s+overrule\s+{target}",
+                flags,
+            ),
+        ),
+        (
+            "KEEP",
+            re.compile(
+                rf"\breaffirm(?:s|ed|ing)?\b.{{0,90}}{target}",
+                flags,
+            ),
+        ),
+        (
+            "APPLY",
+            re.compile(rf"\bunder\s+{target}", flags),
+        ),
+        (
+            "APPLY",
+            re.compile(rf"\bin\s+light\s+of\s+{target}", flags),
+        ),
+        (
+            "APPLY",
+            re.compile(
+                rf"\bas\s+we\s+(?:stated|explained|held)\s+in\s+{target}",
+                flags,
+            ),
+        ),
+        (
+            "APPLY",
+            re.compile(
+                rf"{target}.{{0,180}}\b(?:guide|guides|guided)\s+our\s+analysis\b",
+                flags,
+            ),
+        ),
+        (
+            "APPLY",
+            re.compile(
+                rf"{target}.{{0,180}}\bset\s+forth\s+(?:a|the)\s+framework\b",
+                flags,
+            ),
+        ),
+        (
+            "APPLY",
+            re.compile(
+                rf"{target}.{{0,160}}\b(?:applies?|governs?|controls?)\b",
+                flags,
+            ),
+        ),
+        (
+            "APPLY",
+            re.compile(
+                rf"\bwe\s+hold\b.{{0,180}}{target}",
+                flags,
+            ),
+        ),
+    ]
 
 
 def _collect_actions(
     text: str,
     *,
-    target_pattern: re.Pattern[str],
+    target_citation: str,
+    target_term: str | None,
 ) -> tuple[list[str], list[str]]:
     actions: list[str] = []
     cues: list[str] = []
@@ -195,28 +423,10 @@ def _collect_actions(
     if not text:
         return actions, cues
 
-    target_spans = [match.span() for match in target_pattern.finditer(text)]
-    if not target_spans:
-        return actions, cues
-
-    patterns = (
-        CURRENT_COURT_NEGATIVE
-        + CURRENT_COURT_LIMIT
-        + CURRENT_COURT_AFFIRMATIVE
-    )
-
-    for action, pattern in patterns:
+    for action, pattern in _action_patterns(
+        _target_source(target_citation, target_term)
+    ):
         for match in pattern.finditer(text):
-            # Require the treatment cue to live close to a target mention.
-            # This is relation linking, not mere passage-level keyword matching.
-            cue_start, cue_end = match.span()
-            distance = min(
-                min(abs(cue_start - target_end), abs(target_start - cue_end))
-                for target_start, target_end in target_spans
-            )
-            if distance > 180:
-                continue
-
             value = match.group(0).strip()
             if action not in actions:
                 actions.append(action)
@@ -228,16 +438,17 @@ def _collect_actions(
 
 def _relation_from_actions(actions: list[str]) -> tuple[str, str]:
     kinds = set(actions)
+    has_negative = bool(kinds & {"OVERRULE", "WEAKEN"})
     has_affirmative = bool(kinds & {"APPLY", "KEEP"})
     has_limit = "LIMIT" in kinds
-    has_negative = bool(kinds & {"OVERRULE", "ABROGATE", "DISAPPROVE", "WEAKEN"})
 
-    active = sum([has_affirmative, has_limit, has_negative])
-
-    if active > 1:
-        return "MIXED_OR_CONFLICTING", "high"
+    # Explicit negative treatment is a legal-world change signal even if the
+    # later opinion also describes parts of the old rule as useful.
     if has_negative:
         return "NEGATIVE_TREATMENT", "high"
+
+    if has_affirmative and has_limit:
+        return "MIXED_OR_CONFLICTING", "high"
     if has_limit:
         return "DISTINGUISHES_OR_LIMITS", "high"
     if has_affirmative:
@@ -250,11 +461,13 @@ def extract_structured_relation(
     *,
     target_citation: str,
     target_term: str | None = None,
+    target_resolution: str = "DIRECT_CONTEXT",
 ) -> dict[str, Any]:
     text = normalize_source_text(context)
     if not text:
         return RelationFrame(
             target_present=False,
+            target_resolution=target_resolution,
             attribution_owner="UNKNOWN",
             attributed_proposition="",
             current_court_actions=[],
@@ -264,10 +477,7 @@ def extract_structured_relation(
             abstention_reason="empty_context",
         ).to_dict()
 
-    target_pattern = re.compile(
-        _target_source(target_citation, target_term),
-        re.IGNORECASE,
-    )
+    target_pattern = _target_pattern(target_citation, target_term)
 
     if not _target_present(
         text,
@@ -276,6 +486,7 @@ def extract_structured_relation(
     ):
         return RelationFrame(
             target_present=False,
+            target_resolution=target_resolution,
             attribution_owner="UNKNOWN",
             attributed_proposition="",
             current_court_actions=[],
@@ -311,7 +522,8 @@ def extract_structured_relation(
 
         actions, cues = _collect_actions(
             treatment_text,
-            target_pattern=target_pattern,
+            target_citation=target_citation,
+            target_term=target_term,
         )
         for action in actions:
             if action not in all_actions:
@@ -331,6 +543,7 @@ def extract_structured_relation(
 
     return RelationFrame(
         target_present=True,
+        target_resolution=target_resolution,
         attribution_owner=owner,
         attributed_proposition=" ".join(attributed_props)[:1600],
         current_court_actions=all_actions,
