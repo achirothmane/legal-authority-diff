@@ -2,8 +2,6 @@ name: authority-relation-v0.9
 
 on:
   workflow_dispatch:
-  push:
-    branches: ["v0.9-authority-relation-heldout"]
 
 concurrency:
   group: authority-relation-v0.9
