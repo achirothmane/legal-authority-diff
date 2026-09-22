@@ -4,10 +4,12 @@ from pathlib import Path
 
 from legal_authority_diff.authority_relation_v09 import (
     classify_precedent_relation as classify_v09,
-    extract_anchor_context,
+)
+from legal_authority_diff.structured_relation import (
+    build_relation_context,
+    extract_structured_relation,
 )
 from legal_authority_diff.govinfo import fetch_us_reports_text
-from legal_authority_diff.structured_relation import extract_structured_relation
 
 
 DATASET = Path("benchmarks/authority-relation-v0.9/heldout.jsonl")
@@ -32,11 +34,14 @@ for row in rows:
         cache[citation] = fetch_us_reports_text(citation)
 
     source_text, metadata = cache[citation]
-    context = extract_anchor_context(
+    context_info = build_relation_context(
         source_text,
-        row["anchor"],
+        anchor=row["anchor"],
+        target_citation=row["target_citation"],
+        target_term=row["target_term"],
         radius=int(row["radius"]),
     )
+    context = context_info["text"]
 
     if not context:
         v09 = {
@@ -64,6 +69,7 @@ for row in rows:
             context,
             target_citation=row["target_citation"],
             target_term=row["target_term"],
+            target_resolution=context_info["target_resolution"],
         )
 
     results.append(
@@ -87,6 +93,7 @@ for row in rows:
                 "current_court_actions": v10["current_court_actions"],
                 "current_court_cues": v10["current_court_cues"],
                 "abstention_reason": v10["abstention_reason"],
+                "context_resolution": context_info,
             },
         }
     )
