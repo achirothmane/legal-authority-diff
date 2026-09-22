@@ -25,6 +25,12 @@ CASES = [
     ("McDonnell v. United States", "579 U.S. 550", ["Sun-Diamond", "official act", "question or matter"]),
     ("Wearry v. Cain", "577 U.S. 385", ["Brady", "material", "suppressed"]),
     ("Caetano v. Massachusetts", "577 U.S. 411", ["Heller", "stun gun", "Second Amendment"]),
+    ("Alleyne v. United States", "570 U.S. 99", ["Harris", "overrule", "overruled"]),
+    ("Kimble v. Marvel Entertainment", "576 U.S. 446", ["Brulotte", "overrule", "stare decisis"]),
+    ("Fernandez v. California", "571 U.S. 292", ["Randolph", "distinguish", "objecting occupant"]),
+    ("Halliburton Co. v. Erica P. John Fund", "573 U.S. 258", ["Basic", "overrule", "presumption"]),
+    ("Lafler v. Cooper", "566 U.S. 156", ["Strickland", "plea", "ineffective"]),
+    ("Missouri v. Frye", "566 U.S. 134", ["Strickland", "plea", "ineffective"]),
 ]
 
 for case_name, citation, terms in CASES:
