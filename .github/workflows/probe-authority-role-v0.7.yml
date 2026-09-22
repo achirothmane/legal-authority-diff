@@ -19,4 +19,7 @@ jobs:
         with:
           python-version: "3.11"
       - run: python -m pip install -e ".[benchmark]"
-      - run: python scripts/probe_v07_authority_role.py
+      - name: Inspect known V0.5/V0.6 failure windows
+        run: python scripts/probe_v07_authority_role.py
+      - name: Discover negative sources that cite the true authority
+        run: python scripts/discover_v07_provenance_challenges.py
