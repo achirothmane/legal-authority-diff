@@ -1,5 +1,5 @@
 from legal_authority_diff.authority_role import (
-    classify_authority_role,
+    classify_window_in_source,
     compare_authority_roles,
 )
 from legal_authority_diff.benchmark import score_claim_against_source
@@ -9,7 +9,11 @@ from legal_authority_diff.govinfo import fetch_us_reports_text
 def evidence(claim, citation):
     text, metadata = fetch_us_reports_text(citation)
     lexical = score_claim_against_source(claim, text)
-    role = classify_authority_role(lexical["window_full"])
+    role = classify_window_in_source(
+        text,
+        lexical["window_full"],
+        context_chars=320,
+    )
     return {
         "citation": citation,
         "lexical_score": lexical["score"],
