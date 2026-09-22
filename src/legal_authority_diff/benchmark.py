@@ -25,6 +25,7 @@ from .courtlistener import (
     lookup_citation,
     resolve_authority_metadata,
 )
+from .govinfo import GovInfoError, fetch_us_reports_text
 
 
 STOPWORDS = {
@@ -379,39 +380,14 @@ def _resolve_source_text_with_retry(
     raise last_error
 
 
-def run_live_benchmark(
+def _score_rows_from_cache(
     rows: list[dict[str, Any]],
     *,
-    token: str,
+    cache: dict[str, tuple[str, dict[str, Any]]],
     threshold: float,
-    delay_seconds: float,
+    source_name: str,
 ) -> dict[str, Any]:
-    cache: dict[str, tuple[str, dict[str, Any]]] = {}
     results: list[dict[str, Any]] = []
-
-    unique_citations: list[str] = []
-    citation_case_names: dict[str, str | None] = {}
-    for row in rows:
-        citation = str(row["citation"]).strip()
-        case_name = row.get("case_name")
-        case_name = str(case_name).strip() if case_name else None
-
-        if citation not in unique_citations:
-            unique_citations.append(citation)
-            citation_case_names[citation] = case_name
-        elif citation_case_names[citation] != case_name:
-            raise ValueError(
-                f"citation {citation!r} maps to inconsistent case names in benchmark"
-            )
-
-    for index, citation in enumerate(unique_citations):
-        cache[citation] = _resolve_source_text_with_retry(
-            citation,
-            token=token,
-            expected_case_name=citation_case_names[citation],
-        )
-        if delay_seconds > 0 and index < len(unique_citations) - 1:
-            time.sleep(delay_seconds)
 
     for row in rows:
         citation = str(row["citation"]).strip()
@@ -439,8 +415,9 @@ def run_live_benchmark(
     report = evaluate_binary(results, threshold=threshold)
     report["benchmark"] = {
         "name": "real-claim-citation-v0.5",
+        "source": source_name,
         "pairs": len(rows),
-        "unique_citations": len(unique_citations),
+        "unique_citations": len(cache),
         "labels": {
             "supported": sum(1 for x in rows if x["expected_support"] == "supported"),
             "unsupported": sum(1 for x in rows if x["expected_support"] == "unsupported"),
@@ -450,14 +427,97 @@ def run_live_benchmark(
     return report
 
 
+def run_courtlistener_benchmark(
+    rows: list[dict[str, Any]],
+    *,
+    token: str,
+    threshold: float,
+    delay_seconds: float,
+) -> dict[str, Any]:
+    cache: dict[str, tuple[str, dict[str, Any]]] = {}
+
+    unique_citations: list[str] = []
+    citation_case_names: dict[str, str | None] = {}
+    for row in rows:
+        citation = str(row["citation"]).strip()
+        case_name = row.get("case_name")
+        case_name = str(case_name).strip() if case_name else None
+
+        if citation not in unique_citations:
+            unique_citations.append(citation)
+            citation_case_names[citation] = case_name
+        elif citation_case_names[citation] != case_name:
+            raise ValueError(
+                f"citation {citation!r} maps to inconsistent case names in benchmark"
+            )
+
+    for index, citation in enumerate(unique_citations):
+        cache[citation] = _resolve_source_text_with_retry(
+            citation,
+            token=token,
+            expected_case_name=citation_case_names[citation],
+        )
+        if delay_seconds > 0 and index < len(unique_citations) - 1:
+            time.sleep(delay_seconds)
+
+    return _score_rows_from_cache(
+        rows,
+        cache=cache,
+        threshold=threshold,
+        source_name="courtlistener",
+    )
+
+
+def run_govinfo_benchmark(
+    rows: list[dict[str, Any]],
+    *,
+    threshold: float,
+    delay_seconds: float = 0.0,
+) -> dict[str, Any]:
+    cache: dict[str, tuple[str, dict[str, Any]]] = {}
+    unique_citations: list[str] = []
+
+    for row in rows:
+        citation = str(row["citation"]).strip()
+        if citation not in unique_citations:
+            unique_citations.append(citation)
+
+    for index, citation in enumerate(unique_citations):
+        cache[citation] = fetch_us_reports_text(citation)
+        if delay_seconds > 0 and index < len(unique_citations) - 1:
+            time.sleep(delay_seconds)
+
+    return _score_rows_from_cache(
+        rows,
+        cache=cache,
+        threshold=threshold,
+        source_name="govinfo",
+    )
+
+
+# Backwards-compatible name used by early V0.5 experiments.
+run_live_benchmark = run_courtlistener_benchmark
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="legal-benchmark-support",
         description="Run the V0.5 real claim-citation support benchmark.",
     )
     parser.add_argument("dataset", help="Benchmark JSONL path")
+    parser.add_argument(
+        "--source",
+        choices=("govinfo", "courtlistener"),
+        default="govinfo",
+        help="Source backend for opinion text (default: govinfo).",
+    )
     parser.add_argument("--threshold", type=float, default=0.34)
-    parser.add_argument("--delay", type=float, default=7.0)
+    parser.add_argument(
+        "--delay",
+        type=float,
+        default=0.0,
+        help="Delay in seconds between unique source fetches.",
+    )
     parser.add_argument("--output", help="Optional JSON report path")
     parser.add_argument("--token-env", default="COURTLISTENER_TOKEN")
     return parser
@@ -465,20 +525,28 @@ def build_parser() -> argparse.ArgumentParser:
 
 def main(argv: list[str] | None = None) -> int:
     args = build_parser().parse_args(argv)
-    token = os.environ.get(args.token_env)
-    if not token:
-        print(f"error: set {args.token_env}", file=sys.stderr)
-        return 2
 
     try:
         rows = _read_jsonl(args.dataset)
-        report = run_live_benchmark(
-            rows,
-            token=token,
-            threshold=args.threshold,
-            delay_seconds=max(0.0, args.delay),
-        )
-    except (OSError, ValueError, CourtListenerError) as exc:
+
+        if args.source == "govinfo":
+            report = run_govinfo_benchmark(
+                rows,
+                threshold=args.threshold,
+                delay_seconds=max(0.0, args.delay),
+            )
+        else:
+            token = os.environ.get(args.token_env)
+            if not token:
+                print(f"error: set {args.token_env}", file=sys.stderr)
+                return 2
+            report = run_courtlistener_benchmark(
+                rows,
+                token=token,
+                threshold=args.threshold,
+                delay_seconds=max(0.0, args.delay),
+            )
+    except (OSError, ValueError, CourtListenerError, GovInfoError) as exc:
         print(f"error: {exc}", file=sys.stderr)
         return 2
 
