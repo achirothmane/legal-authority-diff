@@ -24,7 +24,7 @@ jobs:
             exit 2
           fi
       - name: Cool down CourtListener lookup throttle
-        run: sleep 20
+        run: sleep 30
       - name: Run 20-pair live support benchmark
         run: |
           legal-benchmark-support \
