@@ -1,9 +1,44 @@
 import unittest
 
 from legal_authority_diff.benchmark import (
+    _disambiguate_lookup,
     evaluate_binary,
     score_claim_against_source,
 )
+
+
+class CitationDisambiguationTests(unittest.TestCase):
+    def test_ambiguous_citation_can_resolve_by_expected_case_name(self):
+        lookup = {
+            "status": 300,
+            "adapter_state": "AMBIGUOUS",
+            "clusters": [
+                {"id": 1, "case_name": "Other v. Decision"},
+                {"id": 2, "case_name": "Gideon v. Wainwright"},
+            ],
+        }
+        result = _disambiguate_lookup(
+            lookup,
+            expected_case_name="Gideon v. Wainwright",
+        )
+        self.assertEqual(result["status"], 200)
+        self.assertEqual(result["clusters"][0]["id"], 2)
+        self.assertEqual(result["adapter_state"], "FOUND_DISAMBIGUATED")
+
+    def test_close_tie_stays_ambiguous(self):
+        lookup = {
+            "status": 300,
+            "adapter_state": "AMBIGUOUS",
+            "clusters": [
+                {"id": 1, "case_name": "Alpha v. Beta"},
+                {"id": 2, "case_name": "Alpha v. Gamma"},
+            ],
+        }
+        result = _disambiguate_lookup(
+            lookup,
+            expected_case_name="Alpha v. Delta",
+        )
+        self.assertEqual(result["status"], 300)
 
 
 class LexicalSupportScoreTests(unittest.TestCase):
