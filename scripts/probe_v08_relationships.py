@@ -8,6 +8,8 @@ CASES = [
     ("Miller-El v. Dretke", "545 U.S. 231", ["Batson", "peremptory", "discrimination"]),
     ("Kumho Tire Co. v. Carmichael", "526 U.S. 137", ["Daubert", "gatekeeping", "apply"]),
     ("Padilla v. Kentucky", "559 U.S. 356", ["Strickland", "apply", "deficient"]),
+    ("Maryland v. Shatzer", "559 U.S. 98", ["Edwards", "break in custody", "does not apply"]),
+    ("Montejo v. Louisiana", "556 U.S. 778", ["Michigan v. Jackson", "overrule", "overruled"]),
 ]
 
 for case_name, citation, terms in CASES:
