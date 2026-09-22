@@ -145,7 +145,7 @@ def fetch_docket_metadata(
         headers={
             "Authorization": f"Token {token}",
             "Accept": "application/json",
-            "User-Agent": "legal-authority-diff/0.3",
+            "User-Agent": "legal-authority-diff/0.4",
         },
         method="GET",
     )
