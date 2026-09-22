@@ -167,7 +167,9 @@ def extract_relation_openai(
     )
 
     return {
-        "model": model,
+        "requested_model": model,
+        "response_model": getattr(response, "model", model),
+        "response_id": getattr(response, "id", None),
         "reasoning_effort": reasoning_effort,
         "extraction": extraction,
         "validation": validation,
