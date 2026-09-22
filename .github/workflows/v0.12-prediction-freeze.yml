@@ -2,8 +2,6 @@ name: v0.12-prediction-freeze
 
 on:
   workflow_dispatch:
-  push:
-    branches: ["v0.12-blinded-prediction-freeze"]
 
 concurrency:
   group: v0.12-prediction-freeze
