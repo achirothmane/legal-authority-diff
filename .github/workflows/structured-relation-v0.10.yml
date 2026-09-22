@@ -1,0 +1,27 @@
+name: structured-relation-v0.10
+
+on:
+  workflow_dispatch:
+  push:
+    branches: ["v0.10-structured-relation-extraction"]
+
+concurrency:
+  group: structured-relation-v0.10
+  cancel-in-progress: true
+
+jobs:
+  dev-replay:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - run: python -m pip install -e ".[benchmark]"
+      - name: Run V0.10 structured relation dev replay
+        run: python scripts/benchmark_v010_structured_relation.py
+      - uses: actions/upload-artifact@v4
+        with:
+          name: v0.10-structured-relation-dev-replay
+          path: /tmp/v0.10-structured-relation-dev-replay.json
