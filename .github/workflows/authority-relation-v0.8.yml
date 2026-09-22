@@ -1,0 +1,29 @@
+name: authority-relation-v0.8
+
+on:
+  workflow_dispatch:
+
+concurrency:
+  group: authority-relation-v0.8
+  cancel-in-progress: true
+
+jobs:
+  authority-relation:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - run: python -m pip install -e ".[benchmark]"
+      - name: Run frozen V0.8 authority relation benchmark
+        run: python scripts/benchmark_v08_authority_relation.py
+      - name: Run V0.8 relation-aware policy benchmark
+        run: python scripts/benchmark_v08_relation_policy.py
+      - uses: actions/upload-artifact@v4
+        with:
+          name: v0.8-authority-relation-reports
+          path: |
+            /tmp/v0.8-authority-relation-report.json
+            /tmp/v0.8-relation-policy-report.json
