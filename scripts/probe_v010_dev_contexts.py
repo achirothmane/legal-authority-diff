@@ -1,9 +1,11 @@
 import json
 from pathlib import Path
 
-from legal_authority_diff.authority_relation_v09 import extract_anchor_context
+from legal_authority_diff.structured_relation import (
+    build_relation_context,
+    extract_structured_relation,
+)
 from legal_authority_diff.govinfo import fetch_us_reports_text
-from legal_authority_diff.structured_relation import extract_structured_relation
 
 
 MISSES = {
@@ -27,15 +29,19 @@ for row in rows:
     if citation not in cache:
         cache[citation] = fetch_us_reports_text(citation)[0]
     source = cache[citation]
-    context = extract_anchor_context(
+    context_info = build_relation_context(
         source,
-        row["anchor"],
+        anchor=row["anchor"],
+        target_citation=row["target_citation"],
+        target_term=row["target_term"],
         radius=int(row["radius"]),
     )
+    context = context_info["text"]
     result = extract_structured_relation(
         context,
         target_citation=row["target_citation"],
         target_term=row["target_term"],
+        target_resolution=context_info["target_resolution"],
     )
     print("=" * 120)
     print(
@@ -44,5 +50,6 @@ for row in rows:
         "TARGET=", row["target_case"],
         row["target_citation"],
     )
+    print("CONTEXT_INFO=", json.dumps(context_info, ensure_ascii=False))
     print("STRUCTURED=", json.dumps(result, ensure_ascii=False))
     print("CONTEXT=", context)
