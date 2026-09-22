@@ -35,6 +35,25 @@ def _citation_pattern(citation: str) -> re.Pattern[str]:
     )
 
 
+def _ocr_tolerant_anchor_pattern(anchor: str) -> re.Pattern[str]:
+    """Fallback matcher for PDF OCR that splits words like ``Ba tson``.
+
+    Exact normalized matching is always attempted first. This fallback only
+    relaxes whitespace/punctuation boundaries; it does not change labels.
+    """
+    normalized = normalize_source_text(anchor)
+    pieces: list[str] = []
+    for char in normalized:
+        if char.isalnum():
+            pieces.append(re.escape(char))
+            pieces.append(r"\s*")
+        elif char.isspace():
+            pieces.append(r"\s*")
+        else:
+            pieces.append(r"[^\w]*")
+    return re.compile("".join(pieces), re.IGNORECASE)
+
+
 def extract_anchor_context(
     source_text: str,
     anchor: str,
@@ -47,12 +66,18 @@ def extract_anchor_context(
         return ""
 
     index = source.lower().find(needle.lower())
+    match_length = len(needle)
+
     if index < 0:
-        return ""
+        fuzzy = _ocr_tolerant_anchor_pattern(needle).search(source)
+        if fuzzy is None:
+            return ""
+        index = fuzzy.start()
+        match_length = fuzzy.end() - fuzzy.start()
 
     span = max(0, int(radius))
     start = max(0, index - span)
-    end = min(len(source), index + len(needle) + span)
+    end = min(len(source), index + match_length + span)
     return source[start:end]
 
 
