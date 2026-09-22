@@ -65,6 +65,13 @@ class AuthorityRelationTests(unittest.TestCase):
             radius=10,
         )
         self.assertIn("declines to overrule Miranda", context)
+    def test_anchor_context_tolerates_ocr_split_inside_name(self):
+        context = extract_anchor_context(
+            "Held: Miller-El is entitled to prevail on his Ba tson claim and obtain relief.",
+            "entitled to prevail on his Batson claim",
+            radius=10,
+        )
+        self.assertIn("Ba tson claim", context)
 
 
 if __name__ == "__main__":
