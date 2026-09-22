@@ -52,7 +52,7 @@ def download_pdf(
         url,
         headers={
             "Accept": "application/pdf",
-            "User-Agent": "legal-authority-diff/0.5",
+            "User-Agent": "legal-authority-diff/0.6",
         },
         method="GET",
     )
