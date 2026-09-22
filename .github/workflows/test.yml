@@ -2,7 +2,7 @@ name: test
 
 on:
   push:
-    branches: ["main", "v0.1-diff-engine"]
+    branches: ["main", "v0.1-diff-engine", "v0.1-falsification-suite"]
   pull_request:
 
 jobs:
@@ -16,3 +16,4 @@ jobs:
       - run: python -m pip install -e .
       - run: python -m unittest discover -s tests -v
       - run: legal-diff examples/baseline.jsonl examples/candidate.jsonl || test $? -eq 1
+      - run: legal-diff benchmarks/synthetic/baseline.jsonl benchmarks/synthetic/candidate.jsonl || test $? -eq 1
