@@ -407,6 +407,14 @@ def safe_treatment(
             "validation": validation,
         }
 
+    if extraction.get("abstain") is True or validation["derived_treatment"] == "UNKNOWN":
+        return {
+            "treatment": "UNKNOWN",
+            "usable": False,
+            "reason": "validated_abstention",
+            "validation": validation,
+        }
+
     return {
         "treatment": validation["derived_treatment"],
         "usable": True,
